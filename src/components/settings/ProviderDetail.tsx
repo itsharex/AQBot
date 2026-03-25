@@ -165,6 +165,24 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [singleTestModelId, setSingleTestModelId] = useState<string>('');
   const [singleTestResult, setSingleTestResult] = useState<{ latencyMs?: number; error?: string } | null>(null);
   const [singleTestLoading, setSingleTestLoading] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerModels, setPickerModels] = useState<Model[]>([]);
+  const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerCollapsed, setPickerCollapsed] = useState<Set<string>>(new Set());
+
+  const pickerGroups = useMemo(() => {
+    const filtered = pickerModels.filter((m) =>
+      !pickerSearch || [m.name, m.model_id].some((v) => v.toLowerCase().includes(pickerSearch.toLowerCase())),
+    );
+    const groups: Record<string, Model[]> = {};
+    for (const m of filtered) {
+      const key = getModelGroupName(m);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(m);
+    }
+    return { filtered, entries: Object.entries(groups) };
+  }, [pickerModels, pickerSearch]);
 
   // Sync local state when provider changes (e.g. switching providers)
   useEffect(() => {
@@ -257,8 +275,16 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     setRefreshing(true);
     try {
       const models = await fetchRemoteModels(providerId);
-      await saveModels(providerId, models);
-      message.success(t('settings.refreshModelsSuccess'));
+      const existingIds = new Set((provider?.models ?? []).map((m) => m.model_id));
+      const newModels = models.filter((m) => !existingIds.has(m.model_id));
+      if (newModels.length === 0) {
+        message.info(t('settings.noNewModels', '没有发现新模型'));
+        return;
+      }
+      setPickerModels(newModels);
+      setPickerSelected(new Set(newModels.map((m) => m.model_id)));
+      setPickerSearch('');
+      setPickerOpen(true);
     } catch (e) {
       const errMsg = String(e);
       if (errMsg.includes('No active key') || errMsg.includes('key')) {
@@ -269,7 +295,23 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     } finally {
       setRefreshing(false);
     }
-  }, [providerId, fetchRemoteModels, saveModels, message, t]);
+  }, [providerId, fetchRemoteModels, provider?.models, message, t]);
+
+  const handlePickerConfirm = useCallback(async () => {
+    const selectedModels = pickerModels.filter((m) => pickerSelected.has(m.model_id));
+    if (selectedModels.length === 0) {
+      setPickerOpen(false);
+      return;
+    }
+    const merged = [...(provider?.models ?? []), ...selectedModels];
+    try {
+      await saveModels(providerId, merged);
+      message.success(t('settings.modelsAdded', { count: selectedModels.length }));
+    } catch {
+      message.error(t('error.saveFailed'));
+    }
+    setPickerOpen(false);
+  }, [pickerModels, pickerSelected, provider?.models, providerId, saveModels, message, t]);
 
   const handleTestSingleModel = useCallback(async () => {
     if (!singleTestModelId) return;
@@ -1184,6 +1226,120 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Model picker modal */}
+      <Modal
+        title={t('settings.selectModels', '选择要添加的模型')}
+        open={pickerOpen}
+        onCancel={() => setPickerOpen(false)}
+        onOk={handlePickerConfirm}
+        okText={`${t('settings.addSelected', '添加选中')} (${pickerSelected.size})`}
+        cancelText={t('common.cancel', '取消')}
+        okButtonProps={{ disabled: pickerSelected.size === 0 }}
+        width={560}
+        styles={{ body: { padding: 0 } }}
+      >
+        {(() => {
+          const { filtered, entries: groupEntries } = pickerGroups;
+          const allFilteredChecked = filtered.length > 0 && filtered.every((m) => pickerSelected.has(m.model_id));
+          const someFilteredChecked = filtered.some((m) => pickerSelected.has(m.model_id));
+          return (
+            <>
+              <div style={{ position: 'sticky', top: 0, zIndex: 1, background: 'inherit', padding: '8px 24px', borderBottom: '1px solid var(--color-border, #f0f0f0)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Checkbox
+                  checked={allFilteredChecked}
+                  indeterminate={someFilteredChecked && !allFilteredChecked}
+                  onChange={(e) => {
+                    setPickerSelected((prev) => {
+                      const next = new Set(prev);
+                      for (const m of filtered) {
+                        if (e.target.checked) next.add(m.model_id);
+                        else next.delete(m.model_id);
+                      }
+                      return next;
+                    });
+                  }}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {t('common.selectAll', '全选')} ({pickerSelected.size}/{pickerModels.length})
+                </Checkbox>
+                <Input
+                  placeholder={t('settings.searchModels', '搜索模型')}
+                  prefix={<Search size={14} />}
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                  allowClear
+                  size="small"
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <div className="model-picker-list" style={{ maxHeight: 420, overflow: 'auto', padding: '4px 16px 12px' }}>
+                {groupEntries.map(([group, models]) => {
+                  const allChecked = models.every((m) => pickerSelected.has(m.model_id));
+                  const someChecked = models.some((m) => pickerSelected.has(m.model_id));
+                  const collapsed = pickerCollapsed.has(group);
+                  return (
+                    <div key={group} style={{ marginBottom: 2 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', cursor: 'pointer', userSelect: 'none' }}>
+                        <span
+                          onClick={() => setPickerCollapsed((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(group)) next.delete(group); else next.add(group);
+                            return next;
+                          })}
+                          style={{ display: 'inline-flex', width: 16, justifyContent: 'center', fontSize: 10, transition: 'transform 0.15s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                        >▼</span>
+                        <Checkbox
+                          checked={allChecked}
+                          indeterminate={someChecked && !allChecked}
+                          onChange={(e) => {
+                            setPickerSelected((prev) => {
+                              const next = new Set(prev);
+                              for (const m of models) {
+                                if (e.target.checked) next.add(m.model_id);
+                                else next.delete(m.model_id);
+                              }
+                              return next;
+                            });
+                          }}
+                          style={{ fontWeight: 600 }}
+                        >
+                          {group}
+                        </Checkbox>
+                        <Tag style={{ marginLeft: 4, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{models.length}</Tag>
+                      </div>
+                      {!collapsed && (
+                        <div style={{ paddingLeft: 40 }}>
+                          {models.map((m) => (
+                            <div key={m.model_id} style={{ padding: '1px 0' }}>
+                              <Checkbox
+                                checked={pickerSelected.has(m.model_id)}
+                                onChange={(e) => {
+                                  setPickerSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(m.model_id);
+                                    else next.delete(m.model_id);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                {m.name || m.model_id}
+                                {m.name && m.name !== m.model_id && (
+                                  <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>({m.model_id})</Text>
+                                )}
+                              </Checkbox>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
       </Modal>
     </div>
   );
