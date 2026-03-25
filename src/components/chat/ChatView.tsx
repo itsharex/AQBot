@@ -1016,15 +1016,14 @@ function DeleteLastVersionPopover({
   deleteMessageGroup,
   messageApi,
   token,
-  t,
 }: {
   msg: Message;
   conversationId: string;
   deleteMessageGroup: (convId: string, parentMsgId: string) => Promise<void>;
   messageApi: ReturnType<typeof App.useApp>['message'];
   token: ReturnType<typeof theme.useToken>['token'];
-  t: (key: string, fallback?: string) => string;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   const handleDeleteThisOnly = async () => {
@@ -1210,7 +1209,6 @@ function AssistantFooter({
                       deleteMessageGroup={deleteMessageGroup}
                       messageApi={messageApi}
                       token={token}
-                      t={t}
                     />
                   );
                 }
