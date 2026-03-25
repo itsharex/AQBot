@@ -117,8 +117,8 @@ export interface Message {
   provider_id: string | null;
   model_id: string | null;
   token_count: number | null;
-  prompt_tokens: number | null;
-  completion_tokens: number | null;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
   attachments: Attachment[];
   thinking: string | null;
   tool_calls_json: string | null;
