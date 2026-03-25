@@ -448,6 +448,8 @@ impl ProviderAdapter for AnthropicAdapter {
             }
             let mut pending_tool_uses: Vec<PendingToolUse> = Vec::new();
             let mut current_tool_use: Option<PendingToolUse> = None;
+            let mut accumulated_prompt_tokens: u32 = 0;
+            let mut accumulated_completion_tokens: u32 = 0;
 
             while let Some(chunk) = byte_stream.next().await {
                 match chunk {
@@ -480,6 +482,16 @@ impl ProviderAdapter for AnthropicAdapter {
                                 .unwrap_or("");
 
                             match event_type {
+                                "message_start" => {
+                                    if let Some(input) = json
+                                        .get("message")
+                                        .and_then(|m| m.get("usage"))
+                                        .and_then(|u| u.get("input_tokens"))
+                                        .and_then(|v| v.as_u64())
+                                    {
+                                        accumulated_prompt_tokens = input as u32;
+                                    }
+                                }
                                 "content_block_start" => {
                                     if let Some(cb) = json.get("content_block") {
                                         if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
@@ -542,15 +554,16 @@ impl ProviderAdapter for AnthropicAdapter {
                                             .get("output_tokens")
                                             .and_then(|v| v.as_u64())
                                             .unwrap_or(0) as u32;
+                                        accumulated_completion_tokens = out;
                                         let _ = tx.unbounded_send(Ok(ChatStreamChunk {
                                             content: None,
                                             thinking: None,
                                             done: false,
                                             is_final: None,
                                             usage: Some(TokenUsage {
-                                                prompt_tokens: 0,
+                                                prompt_tokens: accumulated_prompt_tokens,
                                                 completion_tokens: out,
-                                                total_tokens: out,
+                                                total_tokens: accumulated_prompt_tokens + out,
                                             }),
                                             tool_calls: None,
                                         }));
@@ -571,12 +584,21 @@ impl ProviderAdapter for AnthropicAdapter {
                                             }
                                         }).collect())
                                     };
+                                    let final_usage = if accumulated_prompt_tokens > 0 || accumulated_completion_tokens > 0 {
+                                        Some(TokenUsage {
+                                            prompt_tokens: accumulated_prompt_tokens,
+                                            completion_tokens: accumulated_completion_tokens,
+                                            total_tokens: accumulated_prompt_tokens + accumulated_completion_tokens,
+                                        })
+                                    } else {
+                                        None
+                                    };
                                     let _ = tx.unbounded_send(Ok(ChatStreamChunk {
                                         content: None,
                                         thinking: None,
                                         done: true,
                                         is_final: None,
-                                        usage: None,
+                                        usage: final_usage,
                                         tool_calls,
                                     }));
                                     return;
