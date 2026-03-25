@@ -1,24 +1,38 @@
 import { useState } from 'react';
-import { theme } from 'antd';
-import { FilesSidebar } from '@/components/files/FilesSidebar';
+import { Tabs } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { FILE_CATEGORIES, type FileCategory } from '@/components/files/fileCategories';
 import { FilesContent } from '@/components/files/FilesContent';
-import type { FileCategory } from '@/components/files/fileCategories';
 
 export function FilesPage() {
-  const { token } = theme.useToken();
-  const [activeCategory, setActiveCategory] = useState<FileCategory>('images');
+  const { t } = useTranslation();
+  const [activeKey, setActiveKey] = useState<FileCategory>('images');
+
+  const items = FILE_CATEGORIES.map(({ id, labelKey, icon: Icon }) => ({
+    key: id,
+    label: t(labelKey),
+    icon: <Icon size={16} />,
+    children: <FilesContent key={id} activeCategory={id} />,
+  }));
 
   return (
-    <div className="flex h-full">
-      <div
-        className="w-56 shrink-0 h-full"
-        style={{ borderRight: '1px solid var(--border-color)', backgroundColor: token.colorBgContainer }}
-      >
-        <FilesSidebar activeCategory={activeCategory} onSelect={setActiveCategory} />
-      </div>
-      <div className="min-w-0 flex-1 overflow-y-auto" style={{ backgroundColor: token.colorBgElevated }}>
-        <FilesContent key={activeCategory} activeCategory={activeCategory} />
-      </div>
+    <div className="h-full flex flex-col px-2" style={{ overflow: 'hidden' }}>
+      <Tabs
+        items={items}
+        activeKey={activeKey}
+        onChange={(key) => setActiveKey(key as FileCategory)}
+        className="flex-1"
+        style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+        tabBarStyle={{ flexShrink: 0 }}
+      />
+      <style>{`
+        .h-full > .ant-tabs > .ant-tabs-content-holder {
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+          min-height: 0;
+        }
+      `}</style>
     </div>
   );
 }

@@ -65,7 +65,7 @@ export function FilesContent({ activeCategory }: FilesContentProps) {
     <div
       data-testid="files-content"
       data-category={activeCategory}
-      className="h-full p-6 flex flex-col gap-4"
+      className="h-full px-2 pt-0 pb-4 flex flex-col gap-3"
     >
       {error !== null && (
         <Alert
