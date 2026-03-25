@@ -33,10 +33,29 @@ jobs:
           fi
           echo "✅ Version $TAG is consistent"
 
+  # ── Generate release notes via Release Drafter ─────────
+  draft-release-notes:
+    name: Draft Release Notes
+    needs: [check-version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      body: ${{ steps.drafter.outputs.body }}
+    steps:
+      - uses: release-drafter/release-drafter@v7
+        id: drafter
+        with:
+          tag: ${{ github.ref_name }}
+          name: 'AQBot ${{ github.ref_name }}'
+          publish: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Build for macOS / Windows / Linux x86_64 ───────────
   release:
     name: Build (${{ matrix.target }})
-    needs: [check-version]
+    needs: [check-version, draft-release-notes]
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +134,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'AQBot ${{ github.ref_name }}'
-          releaseBody: 'See the changelog for details.'
+          releaseBody: ${{ needs.draft-release-notes.outputs.body }}
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-rc') }}
           tauriScript: pnpm tauri
@@ -125,7 +144,7 @@ jobs:
   # ── Build for Linux ARM64 (cross-compile) ──────────────
   release-linux-arm:
     name: Build (aarch64-unknown-linux-gnu)
-    needs: [check-version]
+    needs: [check-version, draft-release-notes]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

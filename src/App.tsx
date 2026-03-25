@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ConfigProvider, App as AntdApp, Layout, theme, Modal } from 'antd';
+import { ConfigProvider, App as AntdApp, Layout, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -23,6 +23,7 @@ const { useToken } = theme;
 function AppInner() {
   const { token } = useToken();
   const { t } = useTranslation();
+  const { modal } = AntdApp.useApp();
   const activePage = useUIStore((s) => s.activePage);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
   const isInSettings = activePage === 'settings';
@@ -46,7 +47,7 @@ function AppInner() {
         const { check } = await import('@tauri-apps/plugin-updater');
         const update = await check();
         if (!update) return;
-        Modal.confirm({
+        modal.confirm({
           title: t('settings.updateAvailable'),
           content: `${t('settings.newVersion')}: ${update.version}`,
           okText: t('settings.updateNow'),
@@ -186,6 +187,7 @@ function AppRoot() {
     <ConfigProvider
       locale={i18n.language === 'zh-CN' ? zhCN : undefined}
       theme={themeConfig}
+      modal={{ styles: { mask: { backdropFilter: 'blur(4px)' } } }}
     >
       <AntdApp>
         <AppInner />

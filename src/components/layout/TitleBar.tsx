@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
-import { Dropdown, Tooltip, Modal, theme } from 'antd';
+import { Dropdown, Tooltip, App, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import { Settings, XCircle, Sun, Moon, Monitor, Globe, Pin, PinOff, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ const LANG_OPTIONS = [
 export function TitleBar() {
   const { t, i18n } = useTranslation();
   const { token } = theme.useToken();
+  const { modal } = App.useApp();
   const activePage = useUIStore((s) => s.activePage);
   const enterSettings = useUIStore((s) => s.enterSettings);
   const exitSettings = useUIStore((s) => s.exitSettings);
@@ -81,7 +82,7 @@ export function TitleBar() {
   };
 
   const handleReload = useCallback(() => {
-    Modal.confirm({
+    modal.confirm({
       title: t('desktop.reloadConfirmTitle'),
       content: t('desktop.reloadConfirmContent'),
       okText: t('desktop.reloadConfirmOk'),
@@ -90,7 +91,7 @@ export function TitleBar() {
         window.location.reload();
       },
     });
-  }, [t]);
+  }, [modal, t]);
 
   // Pre-load Tauri window module for synchronous drag calls
   const tauriWindowRef = useRef<typeof import('@tauri-apps/api/window') | null>(null);

@@ -1,8 +1,8 @@
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { CloseCircleFilled, SyncOutlined } from '@ant-design/icons';
-import { Typography, Button, Dropdown, Input, App, Avatar, Alert, Modal, Popconfirm, theme, Tag, Image } from 'antd';
+import { Typography, Button, Dropdown, Input, App, Avatar, Alert, Popconfirm, theme, Tag, Image } from 'antd';
 import type { InputRef } from 'antd';
-import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X } from 'lucide-react';
+import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { getConvIcon } from '@/lib/convIcon';
 import Bubble from '@ant-design/x/es/bubble';
@@ -23,6 +23,7 @@ import { CHAT_CUSTOM_HTML_TAGS, parseChatMarkdown, type ChatMarkdownNode } from 
 import { WebSearchNode } from './WebSearchNode';
 import { McpContainerNode } from './McpContainerNode';
 import { getDistanceToHistoryTop, shouldShowScrollToBottom } from './chatScroll';
+import { formatTokenCount } from '../gateway/tokenFormat';
 import { getStreamingLoadingState } from './chatStreaming';
 import { buildAssistantDisplayContent, shouldHideAssistantBubble } from './toolCallDisplay';
 
@@ -65,6 +66,7 @@ const ATTACHMENT_IMG_STYLE: React.CSSProperties = {
 
 function AttachmentPreview({ att, themeColor }: { att: Attachment; themeColor: string }) {
   const { t } = useTranslation();
+  const { modal } = App.useApp();
   const isImage = att.file_type?.startsWith('image/');
   const [src, setSrc] = React.useState<string | null>(() => {
     if (!isImage) return null;
@@ -101,7 +103,7 @@ function AttachmentPreview({ att, themeColor }: { att: Attachment; themeColor: s
     const showMissingModal = () => {
       invoke<string>('resolve_attachment_path', { filePath: att.file_path })
         .then((absPath) => {
-          Modal.confirm({
+          modal.confirm({
             icon: <CloseCircleFilled style={{ color: '#ff4d4f' }} />,
             title: t('chat.attachmentNotFound'),
             content: absPath,
@@ -113,7 +115,7 @@ function AttachmentPreview({ att, themeColor }: { att: Attachment; themeColor: s
           });
         })
         .catch(() => {
-          Modal.error({
+          modal.error({
             title: t('chat.attachmentNotFound'),
             content: att.file_path || att.file_name,
             okText: t('chat.attachmentOk'),
@@ -1541,7 +1543,24 @@ export function ChatView() {
           </span>
         </div>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {msg && (msg.prompt_tokens != null || msg.completion_tokens != null) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: token.colorTextDescription, lineHeight: '16px', marginTop: -6, marginBottom: 4 }}>
+              {msg.prompt_tokens != null && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                  <ArrowUp size={10} />
+                  {formatTokenCount(msg.prompt_tokens)} tokens
+                </span>
+              )}
+              {msg.completion_tokens != null && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                  <ArrowDown size={10} />
+                  {formatTokenCount(msg.completion_tokens)} tokens
+                </span>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
           {msg && activeConversationId && (
             <VersionPagination msg={msg} conversationId={activeConversationId} />
           )}
@@ -1597,10 +1616,11 @@ export function ChatView() {
               },
             ]}
           />
+          </div>
         </div>
       ),
     };
-  }, [activeConversationId, aiContentNodesById, codeBlockDarkTheme, codeBlockThemes, deleteMessage, formatTime, getBubbleVariant, getModelDisplayInfo, isDarkMode, messageApi, messageById, regenerateMessage, renderConvIconForChat, streaming, streamingMessageId, t, token.colorError, token.colorPrimary]);
+  }, [activeConversationId, aiContentNodesById, codeBlockDarkTheme, codeBlockThemes, deleteMessage, formatTime, getBubbleVariant, getModelDisplayInfo, isDarkMode, messageApi, messageById, regenerateMessage, renderConvIconForChat, streaming, streamingMessageId, t, token.colorError, token.colorPrimary, token.colorTextDescription]);
 
   const contextClearRole = useCallback((bubbleData: BubbleItemType) => {
     const msgId = String(bubbleData.content ?? '');

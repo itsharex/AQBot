@@ -588,6 +588,8 @@ fn spawn_stream_task(
 
         // After loop: save final assistant message to DB
         let token_count = total_usage.as_ref().map(|u| u.completion_tokens);
+        let prompt_tokens = total_usage.as_ref().map(|u| u.prompt_tokens);
+        let completion_tokens = total_usage.as_ref().map(|u| u.completion_tokens);
         if let Err(e) = (aqbot_core::entity::messages::ActiveModel {
             id: Set(assistant_message_id.clone()),
             conversation_id: Set(conversation_id.clone()),
@@ -596,6 +598,8 @@ fn spawn_stream_task(
             provider_id: Set(Some(provider.id.clone())),
             model_id: Set(Some(model_id.clone())),
             token_count: Set(token_count.map(|v| v as i64)),
+            prompt_tokens: Set(prompt_tokens.map(|v| v as i64)),
+            completion_tokens: Set(completion_tokens.map(|v| v as i64)),
             attachments: Set("[]".to_string()),
             thinking: Set(if total_thinking.is_empty() { None } else { Some(total_thinking.clone()) }),
             created_at: Set(aqbot_core::utils::now_ts()),

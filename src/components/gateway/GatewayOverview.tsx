@@ -320,10 +320,10 @@ export function GatewayOverview({ onViewMoreLogs }: GatewayOverviewProps) {
                 >
                   {formatTokenCount(metrics?.today_tokens ?? 0)}
                 </div>
-                <Tag icon={<ArrowDown size={12} />} color="blue">
+                <Tag icon={<ArrowUp size={12} />} color="blue">
                   {formatTokenCount(metrics?.today_request_tokens ?? 0)}
                 </Tag>
-                <Tag icon={<ArrowUp size={12} />} color="purple">
+                <Tag icon={<ArrowDown size={12} />} color="purple">
                   {formatTokenCount(metrics?.today_response_tokens ?? 0)}
                 </Tag>
               </div>
@@ -360,10 +360,10 @@ export function GatewayOverview({ onViewMoreLogs }: GatewayOverviewProps) {
                 >
                   {formatTokenCount(metrics?.total_tokens ?? 0)}
                 </div>
-                <Tag icon={<ArrowDown size={12} />} color="blue">
+                <Tag icon={<ArrowUp size={12} />} color="blue">
                   {formatTokenCount(metrics?.total_request_tokens ?? 0)}
                 </Tag>
-                <Tag icon={<ArrowUp size={12} />} color="purple">
+                <Tag icon={<ArrowDown size={12} />} color="purple">
                   {formatTokenCount(metrics?.total_response_tokens ?? 0)}
                 </Tag>
               </div>

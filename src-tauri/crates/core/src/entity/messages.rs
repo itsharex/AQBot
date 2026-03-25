@@ -12,6 +12,8 @@ pub struct Model {
     pub provider_id: Option<String>,
     pub model_id: Option<String>,
     pub token_count: Option<i64>,
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
     pub attachments: String,
     pub thinking: Option<String>,
     pub created_at: i64,

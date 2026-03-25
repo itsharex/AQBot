@@ -211,6 +211,8 @@ pub struct Message {
     pub provider_id: Option<String>,
     pub model_id: Option<String>,
     pub token_count: Option<u32>,
+    pub prompt_tokens: Option<u32>,
+    pub completion_tokens: Option<u32>,
     pub attachments: Vec<Attachment>,
     pub thinking: Option<String>,
     pub created_at: i64,

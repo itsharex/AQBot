@@ -1,4 +1,4 @@
-import { Button, Card, Divider, Typography, message, Modal, Progress } from 'antd';
+import { Button, Card, Divider, Typography, message, App, Progress } from 'antd';
 import { Github, RefreshCw, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -11,6 +11,7 @@ const { Text } = Typography;
 
 export function AboutPage() {
   const { t } = useTranslation();
+  const { modal } = App.useApp();
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -29,7 +30,7 @@ export function AboutPage() {
     try {
       const update = await check();
       if (update) {
-        Modal.confirm({
+        modal.confirm({
           title: t('settings.updateAvailable'),
           content: `${t('settings.newVersion')}: ${update.version}`,
           okText: t('settings.updateNow'),
