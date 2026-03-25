@@ -33,6 +33,7 @@ pub fn run() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     tracing_subscriber::fmt::init();
 
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -189,6 +190,7 @@ pub fn run() {
             commands::desktop::apply_startup_settings,
             commands::desktop::test_proxy,
             commands::desktop::open_devtools,
+            commands::desktop::list_system_fonts,
             // files
             commands::files::upload_file,
             commands::files::download_file,
@@ -271,15 +273,17 @@ pub fn run() {
                 key
             };
 
+            // Register sqlite-vec extension before any DB connections
+            aqbot_core::vector_store::register_sqlite_vec_extension();
+
             let rt = tokio::runtime::Runtime::new().unwrap();
             let db_handle = rt
                 .block_on(db::create_pool(&db_path))
                 .expect("failed to init db");
 
-            // Initialize vector store (default 1536 dimensions for OpenAI embeddings)
-            let vector_store = rt
-                .block_on(aqbot_core::vector_store::VectorStore::new(&app_dir))
-                .expect("failed to init vector store");
+            // Initialize vector store (shares the sea-orm SQLite connection)
+            let vector_store =
+                aqbot_core::vector_store::VectorStore::new(db_handle.conn.clone());
 
             let tray_language = rt
                 .block_on(aqbot_core::repo::settings::get_settings(&db_handle.conn))

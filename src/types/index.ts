@@ -277,6 +277,9 @@ export interface AppSettings {
   show_on_start: boolean;
   minimize_to_tray: boolean;
   font_size: number;
+  font_weight: number;
+  font_family: string;
+  code_font_family: string;
   bubble_style: string;
   code_theme: string;
   default_provider_id: string | null;

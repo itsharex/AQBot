@@ -1,16 +1,17 @@
-use std::path::Path;
-use std::sync::Arc;
-
-use arrow_array::{
-    ArrayRef, FixedSizeListArray, Float32Array, Int32Array, RecordBatch,
-    RecordBatchIterator, StringArray,
-};
-use arrow_schema::{DataType, Field, Schema, SchemaRef};
-use futures::TryStreamExt;
-use lancedb::connect;
-use lancedb::query::{ExecutableQuery, QueryBase};
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, DbErr, Statement};
 
 use crate::error::{AQBotError, Result};
+
+/// Register the sqlite-vec extension globally.
+///
+/// Must be called **once** before any SQLite connection is opened.
+pub fn register_sqlite_vec_extension() {
+    unsafe {
+        libsqlite3_sys::sqlite3_auto_extension(Some(std::mem::transmute(
+            sqlite_vec::sqlite3_vec_init as *const (),
+        )));
+    }
+}
 
 /// A single embedding record for storage in the vector database.
 #[derive(Debug, Clone)]
@@ -38,73 +39,50 @@ pub struct VectorSearchResult {
     pub score: f32,
 }
 
-/// LanceDB-backed vector store for knowledge base embeddings.
+/// sqlite-vec–backed vector store for knowledge base embeddings.
 ///
-/// Each knowledge base gets its own LanceDB table, named `kb_<id>`.
-/// Vector data is stored at `<data_dir>/vector_db/`.
+/// Each knowledge base gets two tables in the shared SQLite database:
+/// - `vec_{id}_meta` — chunk metadata (id, document_id, content, …)
+/// - `vec_{id}`      — vec0 virtual table holding the embedding vectors
 pub struct VectorStore {
-    db: lancedb::Connection,
+    db: DatabaseConnection,
 }
 
 impl VectorStore {
-    /// Open (or create) a VectorStore rooted at `data_dir`.
-    ///
-    /// The LanceDB files will be stored under `data_dir/vector_db/`.
-    pub async fn new(data_dir: &Path) -> Result<Self> {
-        let db_path = data_dir.join("vector_db");
-        std::fs::create_dir_all(&db_path)?;
-
-        let db = connect(&db_path.to_string_lossy())
-            .execute()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("LanceDB connection failed: {e}")))?;
-
-        Ok(Self { db })
+    /// Create a VectorStore that uses an existing sea-orm connection.
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
     }
 
-    /// Arrow schema used for embedding tables with given dimensions.
-    fn embedding_schema(dimensions: usize) -> SchemaRef {
-        Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Utf8, false),
-            Field::new("document_id", DataType::Utf8, false),
-            Field::new("chunk_index", DataType::Int32, false),
-            Field::new("content", DataType::Utf8, false),
-            Field::new(
-                "vector",
-                DataType::FixedSizeList(
-                    Arc::new(Field::new("item", DataType::Float32, true)),
-                    dimensions as i32,
-                ),
-                false,
-            ),
-        ]))
-    }
-
-    /// Derive the LanceDB table name for a knowledge base.
+    /// Sanitised table-name prefix for a collection.
     fn collection_name(collection_id: &str) -> String {
-        collection_id.replace('-', "_")
+        format!("vec_{}", collection_id.replace('-', "_"))
     }
 
-    /// Ensure a LanceDB table exists for the given knowledge base,
-    /// creating an empty one if it does not.
+    /// Ensure both the metadata and vec0 tables exist for a collection.
     pub async fn ensure_collection(&self, collection_id: &str, dimensions: usize) -> Result<()> {
         let name = Self::collection_name(collection_id);
 
-        let tables = self
-            .db
-            .table_names()
-            .execute()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("Failed to list tables: {e}")))?;
+        self.exec(&format!(
+            "CREATE TABLE IF NOT EXISTS {name}_meta (
+                rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+                id TEXT NOT NULL UNIQUE,
+                document_id TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                content TEXT NOT NULL
+            )"
+        ))
+        .await?;
 
-        if !tables.contains(&name) {
-            let schema = Self::embedding_schema(dimensions);
-            self.db
-                .create_empty_table(&name, schema)
-                .execute()
-                .await
-                .map_err(|e| AQBotError::Provider(format!("Failed to create table: {e}")))?;
-        }
+        self.exec(&format!(
+            "CREATE INDEX IF NOT EXISTS idx_{name}_doc ON {name}_meta(document_id)"
+        ))
+        .await?;
+
+        self.exec(&format!(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS {name} USING vec0(embedding float[{dimensions}])"
+        ))
+        .await?;
 
         Ok(())
     }
@@ -124,12 +102,13 @@ impl VectorStore {
 
         let dimensions = records[0].embedding.len();
 
-        // Validate all records have consistent dimensions
         for (i, record) in records.iter().enumerate() {
             if record.embedding.len() != dimensions {
                 return Err(AQBotError::Provider(format!(
                     "Embedding dimension mismatch at record {}: got {} but expected {}",
-                    i, record.embedding.len(), dimensions
+                    i,
+                    record.embedding.len(),
+                    dimensions
                 )));
             }
         }
@@ -137,28 +116,53 @@ impl VectorStore {
         self.ensure_collection(collection_id, dimensions).await?;
 
         let name = Self::collection_name(collection_id);
-        let table = self
-            .db
-            .open_table(&name)
-            .execute()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("Failed to open table: {e}")))?;
-
-        // Remove previous embeddings for this document before inserting.
         let doc_id = &records[0].document_id;
-        let _ = table
-            .delete(&format!("document_id = '{doc_id}'"))
-            .await;
 
-        let batch = Self::records_to_batch(dimensions, &records)?;
-        let schema = Self::embedding_schema(dimensions);
-        let batches = RecordBatchIterator::new(vec![Ok(batch)], schema);
+        // Delete previous embeddings for this document.
+        self.delete_rows_by_document(&name, doc_id).await?;
 
-        table
-            .add(Box::new(batches))
-            .execute()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("Failed to add embeddings: {e}")))?;
+        // Insert new records.
+        for record in &records {
+            let vec_json = Self::embedding_to_json(&record.embedding);
+
+            self.db
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Sqlite,
+                    &format!(
+                        "INSERT INTO {name}_meta (id, document_id, chunk_index, content) \
+                         VALUES ($1, $2, $3, $4)"
+                    ),
+                    vec![
+                        record.id.clone().into(),
+                        record.document_id.clone().into(),
+                        record.chunk_index.into(),
+                        record.content.clone().into(),
+                    ],
+                ))
+                .await
+                .map_err(Self::wrap)?;
+
+            let last = self
+                .db
+                .query_one(Statement::from_string(
+                    DbBackend::Sqlite,
+                    "SELECT last_insert_rowid() AS rid",
+                ))
+                .await
+                .map_err(Self::wrap)?
+                .ok_or_else(|| AQBotError::Provider("last_insert_rowid failed".into()))?;
+
+            let rowid: i64 = last.try_get("", "rid").map_err(Self::wrap)?;
+
+            self.db
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Sqlite,
+                    &format!("INSERT INTO {name} (rowid, embedding) VALUES ($1, $2)"),
+                    vec![rowid.into(), vec_json.into()],
+                ))
+                .await
+                .map_err(Self::wrap)?;
+        }
 
         Ok(())
     }
@@ -175,39 +179,42 @@ impl VectorStore {
     ) -> Result<Vec<VectorSearchResult>> {
         let name = Self::collection_name(knowledge_base_id);
 
-        let tables = self
-            .db
-            .table_names()
-            .execute()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("Failed to list tables: {e}")))?;
-
-        if !tables.contains(&name) {
+        if !self.table_exists(&format!("{name}_meta")).await? {
             return Ok(vec![]);
         }
 
-        let table = self
+        let vec_json = Self::embedding_to_json(&query_embedding);
+
+        let sql = format!(
+            "SELECT m.id, m.document_id, m.chunk_index, m.content, v.distance \
+             FROM {name} v \
+             JOIN {name}_meta m ON m.rowid = v.rowid \
+             WHERE v.embedding MATCH $1 AND k = $2 \
+             ORDER BY v.distance"
+        );
+
+        let rows = self
             .db
-            .open_table(&name)
-            .execute()
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                &sql,
+                vec![vec_json.into(), (top_k as i64).into()],
+            ))
             .await
-            .map_err(|e| AQBotError::Provider(format!("Failed to open table: {e}")))?;
+            .map_err(Self::wrap)?;
 
-        let batches = table
-            .query()
-            .nearest_to(query_embedding)
-            .map_err(|e| AQBotError::Provider(format!("Search setup failed: {e}")))?
-            .limit(top_k)
-            .execute()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("Search execution failed: {e}")))?
-            .try_collect::<Vec<RecordBatch>>()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("Failed to collect results: {e}")))?;
-
-        let mut results = Vec::new();
-        for batch in &batches {
-            self.extract_search_results(batch, &mut results);
+        let mut results = Vec::with_capacity(rows.len());
+        for row in &rows {
+            results.push(VectorSearchResult {
+                id: row.try_get("", "id").map_err(Self::wrap)?,
+                document_id: row.try_get("", "document_id").map_err(Self::wrap)?,
+                chunk_index: row.try_get("", "chunk_index").map_err(Self::wrap)?,
+                content: row.try_get("", "content").map_err(Self::wrap)?,
+                score: row
+                    .try_get::<f64>("", "distance")
+                    .map(|v| v as f32)
+                    .map_err(Self::wrap)?,
+            });
         }
 
         Ok(results)
@@ -221,110 +228,99 @@ impl VectorStore {
     ) -> Result<()> {
         let name = Self::collection_name(knowledge_base_id);
 
-        let tables = self
-            .db
-            .table_names()
-            .execute()
-            .await
-            .map_err(|e| AQBotError::Provider(format!("Failed to list tables: {e}")))?;
-
-        if tables.contains(&name) {
-            let table = self
-                .db
-                .open_table(&name)
-                .execute()
-                .await
-                .map_err(|e| AQBotError::Provider(format!("Failed to open table: {e}")))?;
-
-            table
-                .delete(&format!("document_id = '{document_id}'"))
-                .await
-                .map_err(|e| AQBotError::Provider(format!("Failed to delete embeddings: {e}")))?;
+        if !self.table_exists(&format!("{name}_meta")).await? {
+            return Ok(());
         }
 
-        Ok(())
+        self.delete_rows_by_document(&name, document_id).await
     }
 
-    /// Drop the entire LanceDB table for a knowledge base.
+    /// Drop both tables for a knowledge base.
     ///
-    /// Silently succeeds if the table does not exist.
+    /// Silently succeeds if the tables do not exist.
     pub async fn delete_collection(&self, knowledge_base_id: &str) -> Result<()> {
         let name = Self::collection_name(knowledge_base_id);
-        let _ = self.db.drop_table(&name).await;
+        let _ = self.exec(&format!("DROP TABLE IF EXISTS {name}")).await;
+        let _ = self
+            .exec(&format!("DROP TABLE IF EXISTS {name}_meta"))
+            .await;
         Ok(())
     }
 
     // ── private helpers ─────────────────────────────────────────────────
 
-    /// Convert a slice of [`EmbeddingRecord`]s into an Arrow [`RecordBatch`].
-    fn records_to_batch(dimensions: usize, records: &[EmbeddingRecord]) -> Result<RecordBatch> {
-        let schema = Self::embedding_schema(dimensions);
+    /// Delete rows from both vec0 and metadata tables by `document_id`.
+    async fn delete_rows_by_document(&self, table_name: &str, document_id: &str) -> Result<()> {
+        let rows = self
+            .db
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                &format!("SELECT rowid FROM {table_name}_meta WHERE document_id = $1"),
+                vec![document_id.to_string().into()],
+            ))
+            .await
+            .map_err(Self::wrap)?;
 
-        let ids: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
-        let doc_ids: Vec<&str> = records.iter().map(|r| r.document_id.as_str()).collect();
-        let chunk_indices: Vec<i32> = records.iter().map(|r| r.chunk_index).collect();
-        let contents: Vec<&str> = records.iter().map(|r| r.content.as_str()).collect();
+        for row in &rows {
+            let rid: i64 = row.try_get("", "rowid").map_err(Self::wrap)?;
+            self.db
+                .execute(Statement::from_sql_and_values(
+                    DbBackend::Sqlite,
+                    &format!("DELETE FROM {table_name} WHERE rowid = $1"),
+                    vec![rid.into()],
+                ))
+                .await
+                .map_err(Self::wrap)?;
+        }
 
-        let flat_embeddings: Vec<f32> = records
-            .iter()
-            .flat_map(|r| r.embedding.iter().copied())
-            .collect();
+        self.db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                &format!("DELETE FROM {table_name}_meta WHERE document_id = $1"),
+                vec![document_id.to_string().into()],
+            ))
+            .await
+            .map_err(Self::wrap)?;
 
-        let id_array = Arc::new(StringArray::from(ids)) as ArrayRef;
-        let doc_id_array = Arc::new(StringArray::from(doc_ids)) as ArrayRef;
-        let chunk_index_array = Arc::new(Int32Array::from(chunk_indices)) as ArrayRef;
-        let content_array = Arc::new(StringArray::from(contents)) as ArrayRef;
-
-        let float_array = Arc::new(Float32Array::from(flat_embeddings)) as ArrayRef;
-        let field = Arc::new(Field::new("item", DataType::Float32, true));
-        let vector_array = Arc::new(
-            FixedSizeListArray::new(field, dimensions as i32, float_array, None),
-        ) as ArrayRef;
-
-        RecordBatch::try_new(
-            schema,
-            vec![
-                id_array,
-                doc_id_array,
-                chunk_index_array,
-                content_array,
-                vector_array,
-            ],
-        )
-        .map_err(|e| AQBotError::Provider(format!("Failed to create record batch: {e}")))
+        Ok(())
     }
 
-    /// Extract [`VectorSearchResult`]s from a single Arrow [`RecordBatch`]
-    /// returned by a LanceDB nearest-neighbour query.
-    fn extract_search_results(&self, batch: &RecordBatch, out: &mut Vec<VectorSearchResult>) {
-        let id_col = batch
-            .column_by_name("id")
-            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
-        let doc_id_col = batch
-            .column_by_name("document_id")
-            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
-        let chunk_col = batch
-            .column_by_name("chunk_index")
-            .and_then(|c| c.as_any().downcast_ref::<Int32Array>());
-        let content_col = batch
-            .column_by_name("content")
-            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
-        let score_col = batch
-            .column_by_name("_distance")
-            .and_then(|c| c.as_any().downcast_ref::<Float32Array>());
+    /// Convert an embedding vector to a JSON array string for sqlite-vec.
+    fn embedding_to_json(embedding: &[f32]) -> String {
+        format!(
+            "[{}]",
+            embedding
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
 
-        if let (Some(ids), Some(doc_ids), Some(chunks), Some(contents), Some(scores)) =
-            (id_col, doc_id_col, chunk_col, content_col, score_col)
-        {
-            for i in 0..batch.num_rows() {
-                out.push(VectorSearchResult {
-                    id: ids.value(i).to_string(),
-                    document_id: doc_ids.value(i).to_string(),
-                    chunk_index: chunks.value(i),
-                    content: contents.value(i).to_string(),
-                    score: scores.value(i),
-                });
-            }
-        }
+    /// Check whether a regular table exists in the database.
+    async fn table_exists(&self, table_name: &str) -> Result<bool> {
+        let row = self
+            .db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=$1",
+                vec![table_name.to_string().into()],
+            ))
+            .await
+            .map_err(Self::wrap)?;
+        Ok(row.is_some())
+    }
+
+    /// Shorthand for executing a statement with no parameters.
+    async fn exec(&self, sql: &str) -> Result<()> {
+        self.db
+            .execute(Statement::from_string(DbBackend::Sqlite, sql))
+            .await
+            .map_err(Self::wrap)?;
+        Ok(())
+    }
+
+    fn wrap(e: DbErr) -> AQBotError {
+        AQBotError::Provider(format!("Vector store error: {e}"))
     }
 }

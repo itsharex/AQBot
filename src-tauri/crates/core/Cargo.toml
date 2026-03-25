@@ -21,9 +21,8 @@ reqwest = { version = "0.12", features = ["json"] }
 regex = "1"
 hex = "0.4"
 toml_edit = "0.22"
-lancedb = { workspace = true }
-arrow-array = { workspace = true }
-arrow-schema = { workspace = true }
+sqlite-vec = { workspace = true }
+libsqlite3-sys = { workspace = true }
 pdf-extract = "0.7"
 zip = "2"
 dirs = "5"

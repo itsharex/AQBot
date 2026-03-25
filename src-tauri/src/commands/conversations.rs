@@ -1600,9 +1600,7 @@ mod tests {
         .unwrap();
 
         let vector_store = Arc::new(
-            aqbot_core::vector_store::VectorStore::new(&temp_dir)
-                .await
-                .unwrap(),
+            aqbot_core::vector_store::VectorStore::new(db.clone()),
         );
         let state = crate::AppState {
             sea_db: db.clone(),

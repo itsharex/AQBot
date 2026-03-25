@@ -156,6 +156,9 @@ function AppRoot() {
   const themeMode = useSettingsStore((s) => s.settings.theme_mode);
   const primaryColor = useSettingsStore((s) => s.settings.primary_color);
   const fontSize = useSettingsStore((s) => s.settings.font_size);
+  const fontWeight = useSettingsStore((s) => s.settings.font_weight);
+  const fontFamily = useSettingsStore((s) => s.settings.font_family);
+  const codeFontFamily = useSettingsStore((s) => s.settings.code_font_family);
   const borderRadius = useSettingsStore((s) => s.settings.border_radius);
   const isDark = useResolvedDarkMode(themeMode);
 
@@ -238,7 +241,25 @@ function AppRoot() {
     });
   }, [i18n, i18n.language]);
 
-  const themeConfig = useShadcnTheme(isDark, primaryColor, fontSize, borderRadius);
+  // Sync font settings to CSS custom properties
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--font-weight', String(fontWeight));
+    if (fontFamily) {
+      root.style.setProperty('--font-family', fontFamily);
+      document.body.style.fontFamily = fontFamily;
+    } else {
+      root.style.removeProperty('--font-family');
+      document.body.style.removeProperty('font-family');
+    }
+    if (codeFontFamily) {
+      root.style.setProperty('--code-font-family', codeFontFamily);
+    } else {
+      root.style.removeProperty('--code-font-family');
+    }
+  }, [fontWeight, fontFamily, codeFontFamily]);
+
+  const themeConfig = useShadcnTheme(isDark, primaryColor, fontSize, borderRadius, fontFamily || undefined, codeFontFamily || undefined);
 
   return (
     <ConfigProvider

@@ -22,7 +22,7 @@ body,
 
 body {
   margin: 0;
-  font-weight: 300;
+  font-weight: var(--font-weight, 400);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -42,9 +42,24 @@ code,
   -webkit-user-select: text;
 }
 
+.code-block-header {
+  padding: 6px 10px !important;
+}
+
+.code-editor-container {
+  min-height: 21px !important;
+}
+
+.code-block-body,
+.code-block-monaco,
+.code-height-placeholder,
+.code-loading-placeholder {
+  min-height: 21px !important;
+}
+
 /* Override antd CSS-in-JS font-weight for all components */
 [class*="ant-"] {
-  font-weight: 300 !important;
+  font-weight: var(--font-weight, 400) !important;
 }
 
 /* Fix icon alignment in dropdown menus (lucide SVGs) */
@@ -60,7 +75,7 @@ b, strong, th,
 .ant-typography strong,
 .ant-menu-item-selected,
 .ant-tabs-tab-active {
-  font-weight: 500 !important;
+  font-weight: calc(var(--font-weight, 400) + 200) !important;
 }
 
 /* Global scrollbar styling — thin, semi-transparent, auto-hide on idle */

@@ -388,6 +388,7 @@ function ThinkingNode(props: NodeComponentProps<{
 }>) {
   const { t } = useTranslation();
   const selectedDarkCodeTheme = useSettingsStore((s) => s.settings.code_theme);
+  const codeFontFamily = useSettingsStore((s) => s.settings.code_font_family);
   const { node, ctx } = props;
   const thinkingNodesCacheRef = useRef<Map<string, ChatMarkdownNode[]>>(new Map());
   const rawThinkingContent = String(node.content ?? '');
@@ -434,6 +435,10 @@ function ThinkingNode(props: NodeComponentProps<{
     () => getChatCodeBlockProps(darkTheme),
     [darkTheme],
   );
+  const codeBlockMonacoOptions = useMemo(
+    () => codeFontFamily ? { fontFamily: codeFontFamily } : undefined,
+    [codeFontFamily],
+  );
   const rendererKey = `${ctx?.customId ?? 'default'}:${ctx?.isDark ? 'dark' : 'light'}:${darkTheme}`;
 
   return (
@@ -458,6 +463,7 @@ function ThinkingNode(props: NodeComponentProps<{
         codeBlockLightTheme={LIGHT_CODE_BLOCK_THEME}
         codeBlockDarkTheme={darkTheme}
         codeBlockProps={codeBlockProps}
+        codeBlockMonacoOptions={codeBlockMonacoOptions}
         customHtmlTags={CHAT_CUSTOM_HTML_TAGS}
         {...CHAT_RENDER_BATCH_PROPS}
       />
@@ -742,6 +748,7 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
   isStreaming,
   codeBlockDarkTheme,
   codeBlockThemes,
+  codeFontFamily,
 }: {
   content: string;
   nodes?: ChatMarkdownNode[];
@@ -749,12 +756,17 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
   isStreaming: boolean;
   codeBlockDarkTheme: string;
   codeBlockThemes: string[];
+  codeFontFamily?: string;
 }) {
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const codeBlockProps = useMemo(
     () => getChatCodeBlockProps(codeBlockDarkTheme),
     [codeBlockDarkTheme],
+  );
+  const codeBlockMonacoOptions = useMemo(
+    () => codeFontFamily ? { fontFamily: codeFontFamily } : undefined,
+    [codeFontFamily],
   );
   const singleD2Node = useMemo(() => getSingleD2CodeBlockNode(nodes), [nodes]);
   const hasDeferredHeavyNodes = useMemo(
@@ -854,6 +866,7 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
         codeBlockLightTheme={LIGHT_CODE_BLOCK_THEME}
         codeBlockDarkTheme={codeBlockDarkTheme}
         codeBlockProps={codeBlockProps}
+        codeBlockMonacoOptions={codeBlockMonacoOptions}
         {...CHAT_RENDER_BATCH_PROPS}
       />
     ) : (
@@ -869,6 +882,7 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
         codeBlockLightTheme={LIGHT_CODE_BLOCK_THEME}
         codeBlockDarkTheme={codeBlockDarkTheme}
         codeBlockProps={codeBlockProps}
+        codeBlockMonacoOptions={codeBlockMonacoOptions}
         {...CHAT_RENDER_BATCH_PROPS}
       />
     )
@@ -880,6 +894,7 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
   && prev.isStreaming === next.isStreaming
   && prev.codeBlockDarkTheme === next.codeBlockDarkTheme
   && prev.codeBlockThemes === next.codeBlockThemes
+  && prev.codeFontFamily === next.codeFontFamily
 ));
 
 // ── Version pagination component for multi-version AI replies ──────────
@@ -1827,6 +1842,7 @@ export function ChatView() {
             isStreaming={isStreaming}
             codeBlockDarkTheme={codeBlockDarkTheme}
             codeBlockThemes={codeBlockThemes}
+            codeFontFamily={settings.code_font_family || undefined}
           />
         );
       },

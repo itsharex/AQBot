@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, type Plugin } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import monacoEditorPluginModule from "vite-plugin-monaco-editor";
@@ -8,8 +8,40 @@ const monacoEditorPlugin = (monacoEditorPluginModule as any).default || monacoEd
 
 const host = process.env.TAURI_DEV_HOST;
 
+// Only bundle commonly-used Shiki language grammars (saves ~8 MB in build).
+// Languages not listed here will gracefully degrade (no syntax highlighting).
+const SHIKI_ALLOWED_LANGS = new Set([
+  "angular-html", "angular-ts", "astro", "bash", "c", "cpp", "csharp",
+  "css", "dart", "dockerfile", "go", "graphql", "html", "html-derivative",
+  "java", "javascript", "json", "json5", "jsonc", "jsx", "kotlin", "less",
+  "lua", "markdown", "mdc", "mdx", "objective-c", "objective-cpp", "php",
+  "python", "ruby", "rust", "sass", "scss", "shell", "shellscript",
+  "sql", "svelte", "swift", "toml", "tsx", "typescript", "vue",
+  "vue-html", "xml", "yaml",
+]);
+
+function shikiLanguageFilter(): Plugin {
+  return {
+    name: "shiki-language-filter",
+    enforce: "pre",
+    resolveId(id) {
+      const m = id.match(/^@shikijs\/langs\/(.+)$/);
+      if (m && !SHIKI_ALLOWED_LANGS.has(m[1])) {
+        return "\0shiki-lang-noop";
+      }
+      return null;
+    },
+    load(id) {
+      if (id === "\0shiki-lang-noop") {
+        return "export default []";
+      }
+      return null;
+    },
+  };
+}
+
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss(), monacoEditorPlugin({})],
+  plugins: [react(), tailwindcss(), monacoEditorPlugin({}), shikiLanguageFilter()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

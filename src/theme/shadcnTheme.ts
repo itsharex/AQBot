@@ -7,7 +7,14 @@ import type { ThemeConfig } from 'antd';
  * Clean borders, consistent radius, subtle shadows.
  * Adapts to dark/light via Ant Design's algorithm.
  */
-export function useShadcnTheme(isDark: boolean, primaryColor: string, fontSize: number, borderRadius: number): ThemeConfig {
+export function useShadcnTheme(
+  isDark: boolean,
+  primaryColor: string,
+  fontSize: number,
+  borderRadius: number,
+  fontFamily?: string,
+  codeFontFamily?: string,
+): ThemeConfig {
   return useMemo<ThemeConfig>(
     () => {
       // Derive proportional radii from the base value
@@ -22,6 +29,8 @@ export function useShadcnTheme(isDark: boolean, primaryColor: string, fontSize: 
           colorLink: primaryColor,
           fontSize,
           fontWeightStrong: 500,
+          ...(fontFamily ? { fontFamily } : {}),
+          ...(codeFontFamily ? { fontFamilyCode: codeFontFamily } : {}),
 
           // Border radius — configurable base with proportional variants
           borderRadius,
@@ -72,6 +81,6 @@ export function useShadcnTheme(isDark: boolean, primaryColor: string, fontSize: 
         },
       };
     },
-    [isDark, primaryColor, fontSize, borderRadius],
+    [isDark, primaryColor, fontSize, borderRadius, fontFamily, codeFontFamily],
   );
 }
