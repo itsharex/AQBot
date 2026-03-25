@@ -39,7 +39,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFNTkxOTMxNDlBRkE0QTAKUldTZ3BLOUpNUmxadmhWZnFET2Y2RFl6Z3B5NlhlbS9xQzRnL1dIVFc3UVZhYXltL3hibitzKzIK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFGOEI0QkFDRTE4RTI4MTEKUldRUktJN2hyRXVMcjNaMTJJa3hxbkpBTGpIUWVMcUdWOXpMMXdnMU5aaTdvM2c2QnNCbHh5SXUK",
       "endpoints": [
         "https://github.com/AQBot-Desktop/AQBot/releases/latest/download/latest.json"
       ]
