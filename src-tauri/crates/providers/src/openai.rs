@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use futures::Stream;
 
-use crate::{ProviderAdapter, ProviderRequestContext, build_http_client};
+use crate::{ProviderAdapter, ProviderRequestContext, build_http_client, resolve_chat_url};
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 
@@ -25,6 +25,10 @@ impl OpenAIAdapter {
         ctx.base_url
             .clone()
             .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
+    }
+
+    fn chat_url(ctx: &ProviderRequestContext) -> String {
+        resolve_chat_url(&Self::base_url(ctx), ctx.api_path.as_deref(), "/chat/completions")
     }
 
     fn get_client(&self, ctx: &ProviderRequestContext) -> Result<reqwest::Client> {
@@ -314,7 +318,7 @@ impl ProviderAdapter for OpenAIAdapter {
         ctx: &ProviderRequestContext,
         request: ChatRequest,
     ) -> Result<ChatResponse> {
-        let url = format!("{}/chat/completions", Self::base_url(ctx));
+        let url = Self::chat_url(ctx);
         let body = build_request(&request, &request.messages, false);
 
         let resp = self
@@ -382,7 +386,7 @@ impl ProviderAdapter for OpenAIAdapter {
     ) -> Pin<Box<dyn Stream<Item = Result<ChatStreamChunk>> + Send>> {
         let client = self.get_client(ctx).unwrap_or_else(|_| self.client.clone());
         let api_key = ctx.api_key.clone();
-        let url = format!("{}/chat/completions", Self::base_url(ctx));
+        let url = Self::chat_url(ctx);
         let body = build_request(&request, &request.messages, true);
 
         let (tx, rx) = futures::channel::mpsc::unbounded();

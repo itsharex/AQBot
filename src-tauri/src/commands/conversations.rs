@@ -1,6 +1,6 @@
 use crate::AppState;
 use aqbot_core::types::*;
-use aqbot_providers::{ProviderRequestContext, registry::ProviderRegistry};
+use aqbot_providers::{ProviderRequestContext, registry::ProviderRegistry, resolve_base_url};
 use base64::Engine;
 use sea_orm::*;
 use tauri::{Emitter, State};
@@ -826,11 +826,8 @@ pub async fn send_message(
         api_key: decrypted_key,
         key_id: key_row.id.clone(),
         provider_id: provider.id.clone(),
-        base_url: Some(if let Some(ref path) = provider.api_path {
-            format!("{}{}", provider.api_host.trim_end_matches('/'), path)
-        } else {
-            provider.api_host.clone()
-        }),
+        base_url: Some(resolve_base_url(&provider.api_host)),
+        api_path: provider.api_path.clone(),
         proxy_config: resolved_proxy,
     };
 
@@ -1047,11 +1044,8 @@ pub async fn regenerate_message(
         api_key: decrypted_key,
         key_id: key_row.id.clone(),
         provider_id: provider.id.clone(),
-        base_url: Some(if let Some(ref path) = provider.api_path {
-            format!("{}{}", provider.api_host.trim_end_matches('/'), path)
-        } else {
-            provider.api_host.clone()
-        }),
+        base_url: Some(resolve_base_url(&provider.api_host)),
+        api_path: provider.api_path.clone(),
         proxy_config: resolved_proxy,
     };
 

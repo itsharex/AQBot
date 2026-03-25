@@ -20,7 +20,7 @@ import {
   App,
   theme,
 } from 'antd';
-import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2 } from 'lucide-react';
+import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp } from 'lucide-react';
 import { ProviderIcon, ModelIcon } from '@lobehub/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -159,6 +159,33 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     setApiHostLocal(provider?.api_host ?? '');
     setApiPathLocal(provider?.api_path ?? '');
   }, [provider?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resolve actual request URLs for preview
+  const resolvedUrls = useMemo(() => {
+    const host = apiHostLocal || DEFAULT_HOSTS[provider?.provider_type ?? 'custom'] || '';
+    const path = apiPathLocal || DEFAULT_PATHS[provider?.provider_type ?? 'custom'] || '';
+
+    // resolve base_url: strip trailing !, auto-add /v1 if missing
+    const trimmed = host.replace(/\/+$/, '');
+    const forced = trimmed.endsWith('!');
+    const rawHost = forced ? trimmed.slice(0, -1).replace(/\/+$/, '') : trimmed;
+    const resolvedBase = forced ? rawHost : rawHost.endsWith('/v1') ? rawHost : `${rawHost}/v1`;
+
+    // resolve chat url: strip ! from path, dedup /v1
+    const pathForced = path.endsWith('!');
+    const rawPath = pathForced ? path.slice(0, -1) : path;
+    const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    let chatUrl: string;
+    if (pathForced) {
+      chatUrl = `${resolvedBase}${normalizedPath}`;
+    } else if (resolvedBase.endsWith('/v1') && normalizedPath.startsWith('/v1')) {
+      chatUrl = `${resolvedBase}${normalizedPath.slice(3)}`;
+    } else {
+      chatUrl = `${resolvedBase}${normalizedPath}`;
+    }
+
+    return { resolvedBase, chatUrl };
+  }, [apiHostLocal, apiPathLocal, provider?.provider_type]);
 
   const filteredModels = useMemo(
     () =>
@@ -461,8 +488,18 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
 
       {/* API Host + Path */}
       <Card title={t('settings.apiHost')} size="small">
-        <Form layout="horizontal" colon={false} labelCol={{ flex: '80px' }} wrapperCol={{ flex: 1 }}>
-          <Form.Item label="Base URL" style={{ marginBottom: 12 }}>
+        <Form layout="horizontal" colon={false} labelCol={{ flex: '110px' }} wrapperCol={{ flex: 1 }}>
+          <Form.Item
+            label={
+              <Space size={4}>
+                <span>Base URL</span>
+                <Tooltip title={t('settings.urlHintExclamation')}>
+                  <CircleHelp size={14} style={{ cursor: 'help' }} />
+                </Tooltip>
+              </Space>
+            }
+            style={{ marginBottom: 12 }}
+          >
             <Space.Compact style={{ width: '100%' }}>
               <Input
                 value={apiHostLocal}
@@ -480,13 +517,29 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 {t('settings.resetDefault')}
               </Button>
             </Space.Compact>
+            <div style={{ marginTop: 4, fontSize: 12, color: token.colorTextQuaternary }}>
+              {t('settings.urlPreviewLabel')}{resolvedUrls.resolvedBase}
+            </div>
           </Form.Item>
-          <Form.Item label={t('settings.apiPath')} style={{ marginBottom: 0 }}>
+          <Form.Item
+            label={
+              <Space size={4}>
+                <span>{t('settings.apiPath')}</span>
+                <Tooltip title={t('settings.urlHintExclamation')}>
+                  <CircleHelp size={14} style={{ cursor: 'help' }} />
+                </Tooltip>
+              </Space>
+            }
+            style={{ marginBottom: 0 }}
+          >
             <Input
               value={apiPathLocal || DEFAULT_PATHS[provider.provider_type]}
               onChange={(e) => handleApiPathChange(e.target.value)}
               placeholder={DEFAULT_PATHS[provider.provider_type]}
             />
+            <div style={{ marginTop: 4, fontSize: 12, color: token.colorTextQuaternary }}>
+              {t('settings.urlPreviewLabel')}{resolvedUrls.chatUrl}
+            </div>
           </Form.Item>
         </Form>
       </Card>

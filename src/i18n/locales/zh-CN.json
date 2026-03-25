@@ -382,6 +382,8 @@
     "providerType": "服务商类型",
     "apiHost": "API 地址",
     "apiPath": "API 路径",
+    "urlHintExclamation": "末尾加 ! 可强制使用原始地址，不自动补全 /v1",
+    "urlPreviewLabel": "实际请求：",
     "apiKeys": "API 密钥",
     "models": "模型列表",
     "modelName": "模型名称",

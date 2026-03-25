@@ -14,7 +14,7 @@ use aqbot_core::types::*;
 use aqbot_core::vector_store::{EmbeddingRecord, VectorSearchResult, VectorStore};
 use aqbot_core::{document_parser, text_chunker};
 
-use aqbot_providers::{ProviderAdapter, ProviderRequestContext, registry::ProviderRegistry};
+use aqbot_providers::{ProviderAdapter, ProviderRequestContext, registry::ProviderRegistry, resolve_base_url};
 
 /// Parse an embedding_provider string like "providerId::modelId" into (provider_id, model_id).
 pub fn parse_embedding_provider(embedding_provider: &str) -> Result<(String, String)> {
@@ -57,11 +57,8 @@ pub async fn build_embed_context(
         api_key: decrypted_key,
         key_id: key_row.id.clone(),
         provider_id: provider.id.clone(),
-        base_url: Some(if let Some(ref path) = provider.api_path {
-            format!("{}{}", provider.api_host.trim_end_matches('/'), path)
-        } else {
-            provider.api_host.clone()
-        }),
+        base_url: Some(resolve_base_url(&provider.api_host)),
+        api_path: None,
         proxy_config: resolved_proxy,
     };
 

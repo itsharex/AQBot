@@ -118,11 +118,8 @@ pub async fn validate_provider_key(
         api_key: decrypted,
         key_id: key_id.clone(),
         provider_id: provider.id.clone(),
-        base_url: Some(if let Some(ref path) = provider.api_path {
-            format!("{}{}", provider.api_host.trim_end_matches('/'), path)
-        } else {
-            provider.api_host.clone()
-        }),
+        base_url: Some(aqbot_providers::resolve_base_url(&provider.api_host)),
+        api_path: None,
         proxy_config: resolved_proxy,
     };
     let valid = adapter.list_models(&ctx).await.is_ok();
@@ -204,11 +201,8 @@ pub async fn fetch_remote_models(
         api_key: decrypted,
         key_id: key_row.id.clone(),
         provider_id: provider.id.clone(),
-        base_url: Some(if let Some(ref path) = provider.api_path {
-            format!("{}{}", provider.api_host.trim_end_matches('/'), path)
-        } else {
-            provider.api_host.clone()
-        }),
+        base_url: Some(aqbot_providers::resolve_base_url(&provider.api_host)),
+        api_path: None,
         proxy_config: resolved_proxy,
     };
     adapter.list_models(&ctx)

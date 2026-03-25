@@ -8,7 +8,7 @@ use aqbot_core::{
     crypto::decrypt_key,
     types::{GatewayKey, ProviderConfig, ProviderProxyConfig, ProviderType, TokenUsage},
 };
-use aqbot_providers::{build_http_client, ProviderRequestContext};
+use aqbot_providers::{build_http_client, ProviderRequestContext, resolve_base_url};
 use futures::StreamExt;
 use std::{convert::Infallible, time::Instant};
 use tokio_stream::wrappers::ReceiverStream;
@@ -556,11 +556,8 @@ async fn resolve_native_context(
             api_key,
             key_id: provider_key.id.clone(),
             provider_id: provider.id.clone(),
-            base_url: Some(if let Some(ref path) = provider.api_path {
-                format!("{}{}", provider.api_host.trim_end_matches('/'), path)
-            } else {
-                provider.api_host.clone()
-            }),
+            base_url: Some(resolve_base_url(&provider.api_host)),
+            api_path: provider.api_path.clone(),
             proxy_config: resolved_proxy,
         },
         model_id,
