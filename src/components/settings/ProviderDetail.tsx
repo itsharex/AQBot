@@ -98,6 +98,18 @@ function getModelGroupName(model: Pick<Model, 'model_id' | 'group_name'>): strin
   return explicitGroup || deriveModelGroupName(model.model_id);
 }
 
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1000000) {
+    const m = tokens / 1000000;
+    return m % 1 === 0 ? `${m}M` : `${m.toFixed(1)}M`;
+  }
+  if (tokens >= 1000) {
+    const k = tokens / 1000;
+    return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`;
+  }
+  return `${tokens}`;
+}
+
 function getDefaultCapabilitiesForType(modelType: ModelType): ModelCapability[] {
   switch (modelType) {
     case 'Voice':
@@ -153,6 +165,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [editingModel, setEditingModel] = useState<Model | null>(null);
   const [editCapabilities, setEditCapabilities] = useState<ModelCapability[]>([]);
   const [editModelType, setEditModelType] = useState<ModelType>('Chat');
+  const [editMaxTokens, setEditMaxTokens] = useState<number | null>(null);
   const [paramForm] = Form.useForm();
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconOverrides, setIconOverrides] = useState<Record<string, string>>({});
@@ -449,6 +462,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       const nextModelType = model.model_type || 'Chat';
       setEditCapabilities(sanitizeModelCapabilities(nextModelType, model.capabilities));
       setEditModelType(nextModelType);
+      setEditMaxTokens(model.max_tokens ?? 128000);
       paramForm.setFieldsValue({
         temperature: model.param_overrides?.temperature ?? 0.7,
         max_tokens: model.param_overrides?.max_tokens ?? 4096,
@@ -469,7 +483,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       // Update capabilities locally via saveModels
       const updatedModels = (provider?.models ?? []).map((m) =>
         m.model_id === editingModel.model_id
-          ? { ...m, capabilities: nextCapabilities, model_type: editModelType, param_overrides: values }
+          ? { ...m, capabilities: nextCapabilities, model_type: editModelType, param_overrides: values, max_tokens: editMaxTokens }
           : m,
       );
       await saveModels(providerId, updatedModels);
@@ -478,7 +492,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     } catch {
       message.error(t('error.saveFailed'));
     }
-  }, [editingModel, editCapabilities, editModelType, providerId, paramForm, updateModelParams, saveModels, provider?.models, message, t]);
+  }, [editingModel, editCapabilities, editModelType, editMaxTokens, providerId, paramForm, updateModelParams, saveModels, provider?.models, message, t]);
 
   const handleApiHostChange = useCallback(
     (value: string) => {
@@ -952,6 +966,11 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                             </Tag>
                           </Tooltip>
                         ))}
+                        {model.max_tokens != null && model.max_tokens > 0 && (
+                          <Tag bordered={false} color="default" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>
+                            {formatTokenCount(model.max_tokens)}
+                          </Tag>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
@@ -1241,6 +1260,23 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 </div>
               </>
             )}
+
+            <Divider className="my-3" />
+
+            {/* Context Window */}
+            <div>
+              <div className="font-medium mb-2">{t('settings.contextWindow')}</div>
+              <InputNumber
+                value={editMaxTokens}
+                onChange={(v) => setEditMaxTokens(v)}
+                min={1024}
+                max={10000000}
+                step={1024}
+                style={{ width: '100%' }}
+                addonAfter="tokens"
+                formatter={(v) => v ? `${Number(v).toLocaleString()}` : ''}
+              />
+            </div>
 
             <Divider className="my-3" />
 

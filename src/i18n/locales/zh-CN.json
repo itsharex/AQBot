@@ -432,6 +432,7 @@
     "providerProxy": "服务商代理",
     "temperature": "温度",
     "maxTokens": "最大 Token",
+    "contextWindow": "上下文窗口",
     "topP": "Top P",
     "frequencyPenalty": "频率惩罚",
     "defaultProvider": "默认服务商",

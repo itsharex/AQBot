@@ -432,6 +432,7 @@
     "providerProxy": "Provider Proxy",
     "temperature": "Temperature",
     "maxTokens": "Max Tokens",
+    "contextWindow": "Context Window",
     "topP": "Top P",
     "frequencyPenalty": "Frequency Penalty",
     "defaultProvider": "Default Provider",
