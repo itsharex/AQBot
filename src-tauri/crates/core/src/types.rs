@@ -1,4 +1,14 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Deserialize `Option<Option<T>>` so that a JSON `null` becomes `Some(None)`
+/// while a missing field (via `#[serde(default)]`) stays `None`.
+fn deserialize_double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
 
 // === Provider System ===
 
@@ -279,7 +289,9 @@ pub struct UpdateConversationInput {
     pub top_p: Option<f64>,
     pub frequency_penalty: Option<f64>,
     pub search_enabled: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
     pub search_provider_id: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
     pub thinking_budget: Option<Option<i64>>,
     pub enabled_mcp_server_ids: Option<Vec<String>>,
     pub enabled_knowledge_base_ids: Option<Vec<String>>,

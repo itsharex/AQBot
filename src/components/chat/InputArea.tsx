@@ -608,7 +608,7 @@ export function InputArea() {
                 open={searchDropdownOpen}
                 onOpenChange={setSearchDropdownOpen}
               >
-                <Tooltip title={searchDropdownOpen ? '' : t('chat.search.title', '联网搜索')}>
+                <Tooltip title={t('chat.search.title', '联网搜索')} open={searchDropdownOpen ? false : undefined}>
                   <Button
                     type="text"
                     size="small"
@@ -631,9 +631,8 @@ export function InputArea() {
                 onOpenChange={setThinkingDropdownOpen}
               >
                 <Tooltip
-                  title={thinkingDropdownOpen
-                    ? ''
-                    : `${t('chat.thinkingIntensity', '思维强度')}: ${selectedThinkingOption.label}`}
+                  title={`${t('chat.thinkingIntensity', '思维强度')}: ${selectedThinkingOption.label}`}
+                  open={thinkingDropdownOpen ? false : undefined}
                 >
                   <Button
                     type="text"
@@ -666,7 +665,7 @@ export function InputArea() {
               open={mcpPopoverOpen}
               onOpenChange={setMcpPopoverOpen}
             >
-              <Tooltip title={mcpPopoverOpen ? '' : t('chat.mcp.title', 'MCP 工具')}>
+              <Tooltip title={t('chat.mcp.title', 'MCP 工具')} open={mcpPopoverOpen ? false : undefined}>
                 <Button
                   type="text"
                   size="small"
