@@ -90,6 +90,7 @@ pub fn run() {
             commands::conversations::compress_context,
             commands::conversations::get_compression_summary,
             commands::conversations::delete_compression,
+            commands::conversations::regenerate_conversation_title,
             // settings
             commands::settings::get_settings,
             commands::settings::save_settings,

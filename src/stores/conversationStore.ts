@@ -309,6 +309,10 @@ interface ConversationState {
   updateWorkspaceSnapshot: (conversationId: string, snapshot: Partial<ConversationWorkspaceSnapshot>) => Promise<void>;
   forkConversation: (conversationId: string, fromMessageId?: string) => Promise<ConversationBranch | null>;
   compareResponses: (leftMessageId: string, rightMessageId: string) => Promise<CompareResponsesResult | null>;
+  /** Conversation ID currently generating an AI title (null if none) */
+  titleGeneratingConversationId: string | null;
+  /** Regenerate the title of a conversation using AI */
+  regenerateTitle: (conversationId: string) => Promise<void>;
 }
 
 function appendStreamChunk(
@@ -452,6 +456,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   streamingConversationId: null,
   thinkingActiveMessageId: null,
   error: null,
+  titleGeneratingConversationId: null,
   searchEnabled: false,
   searchProviderId: null,
   enabledMcpServerIds: [],
@@ -870,6 +875,14 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   renameConversation: async (id, title) => {
     await get().updateConversation(id, { title });
+  },
+
+  regenerateTitle: async (conversationId) => {
+    try {
+      await invoke('regenerate_conversation_title', { conversationId });
+    } catch (e) {
+      set({ error: String(e) });
+    }
   },
 
   deleteConversation: async (id) => {
@@ -1543,11 +1556,22 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       }));
     });
 
+    const titleGenUnsub = await listen<{ conversation_id: string; generating: boolean; error: string | null }>('conversation-title-generating', (event) => {
+      if (_listenerGen !== gen) return;
+      const { conversation_id, generating, error } = event.payload;
+      set({ titleGeneratingConversationId: generating ? conversation_id : null });
+      if (!generating && error) {
+        console.error('[title-gen] AI title generation failed:', error);
+        set({ error });
+      }
+    });
+
     // If generation changed while awaiting, this listener set is stale
     if (_listenerGen !== gen) {
       chunkUnsub();
       errorUnsub();
       titleUnsub();
+      titleGenUnsub();
       return;
     }
 
@@ -1555,6 +1579,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       chunkUnsub();
       errorUnsub();
       titleUnsub();
+      titleGenUnsub();
     };
   },
 

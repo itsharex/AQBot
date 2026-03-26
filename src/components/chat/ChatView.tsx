@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { CloseCircleFilled, SyncOutlined } from '@ant-design/icons';
 import { Typography, Button, Dropdown, Input, App, Avatar, Alert, Popconfirm, Popover, theme, Tag, Image, Tooltip, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
-import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap } from 'lucide-react';
+import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap, Sparkles } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { getConvIcon } from '@/lib/convIcon';
 import Bubble from '@ant-design/x/es/bubble';
@@ -1292,6 +1292,8 @@ export function ChatView() {
   const thinkingActiveMessageId = useConversationStore((s) => s.thinkingActiveMessageId);
   const storeError = useConversationStore((s) => s.error);
   const updateConversation = useConversationStore((s) => s.updateConversation);
+  const titleGeneratingConversationId = useConversationStore((s) => s.titleGeneratingConversationId);
+  const regenerateTitle = useConversationStore((s) => s.regenerateTitle);
   const loadOlderMessages = useConversationStore((s) => s.loadOlderMessages);
   const sendMessage = useConversationStore((s) => s.sendMessage);
   const regenerateMessage = useConversationStore((s) => s.regenerateMessage);
@@ -1314,6 +1316,7 @@ export function ChatView() {
   );
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const isTitleGenerating = activeConversationId != null && titleGeneratingConversationId === activeConversationId;
 
   const renderConvIconForChat = useCallback((size: number, modelId?: string | null) => {
     if (!activeConversation) return <Avatar icon={<Bot size={16} />} style={{ background: token.colorPrimary }} size={size} />;
@@ -1383,6 +1386,7 @@ export function ChatView() {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const titleInputRef = useRef<InputRef>(null);
+  const skipTitleSaveRef = useRef(false);
   const messageAreaRef = useRef<HTMLDivElement>(null);
   const bubbleListRef = useRef<BubbleListRef | null>(null);
   const pendingScrollConversationIdRef = useRef<string | null>(activeConversationId ?? null);
@@ -1413,11 +1417,22 @@ export function ChatView() {
   }, [activeConversation]);
 
   const handleTitleSave = useCallback(async () => {
+    if (skipTitleSaveRef.current) {
+      skipTitleSaveRef.current = false;
+      return;
+    }
     setEditingTitle(false);
     const trimmed = titleDraft.trim();
     if (!trimmed || !activeConversation || trimmed === activeConversation.title) return;
     await updateConversation(activeConversation.id, { title: trimmed });
   }, [titleDraft, activeConversation, updateConversation]);
+
+  const handleRegenerateTitle = useCallback(async () => {
+    if (!activeConversation || isTitleGenerating) return;
+    skipTitleSaveRef.current = true;
+    setEditingTitle(false);
+    await regenerateTitle(activeConversation.id);
+  }, [activeConversation, isTitleGenerating, regenerateTitle]);
 
   const handleLoadOlderMessages = useCallback(async () => {
     const scrollContainer = bubbleListRef.current?.scrollBoxNativeElement as HTMLDivElement | null | undefined;
@@ -2168,21 +2183,37 @@ export function ChatView() {
           <>
             {renderConvIconForChat(24)}
             {editingTitle ? (
-              <Input
-                ref={titleInputRef}
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={handleTitleSave}
-                onPressEnter={handleTitleSave}
-                size="small"
-                style={{ maxWidth: 240 }}
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={handleTitleSave}
+                  onPressEnter={handleTitleSave}
+                  size="small"
+                  style={{ maxWidth: 240 }}
+                />
+                <Tooltip title={t('chat.aiGenerateTitle')}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={isTitleGenerating ? <SyncOutlined spin /> : <Sparkles size={14} />}
+                    disabled={isTitleGenerating}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => { e.stopPropagation(); handleRegenerateTitle(); }}
+                  />
+                </Tooltip>
+              </div>
             ) : (
               <Typography.Text
                 className="cursor-pointer select-none"
                 onClick={handleTitleClick}
               >
-                {activeConversation.title} <Pencil size={12} className="text-xs opacity-50" />
+                {activeConversation.title}
+                {isTitleGenerating
+                  ? <SyncOutlined spin className="ml-1 text-xs opacity-50" />
+                  : <Pencil size={12} className="ml-1 text-xs opacity-50" />
+                }
               </Typography.Text>
             )}
 

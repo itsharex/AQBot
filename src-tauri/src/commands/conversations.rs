@@ -396,6 +396,280 @@ async fn execute_tool_call(
     }
 }
 
+const DEFAULT_TITLE_PROMPT: &str = "You are a title generator. Based on the conversation below, generate a concise and descriptive title (maximum 30 characters). Reply with the title only, no quotes or extra text.";
+
+/// Generate an AI-powered conversation title using the configured title summary model.
+/// Returns Err with the actual error message if generation fails.
+async fn generate_ai_title(
+    db: &sea_orm::DatabaseConnection,
+    user_content: &str,
+    assistant_content: &str,
+    fallback_provider: &ProviderConfig,
+    fallback_ctx: &ProviderRequestContext,
+    fallback_model_id: &str,
+    settings: &AppSettings,
+    master_key: &[u8; 32],
+) -> Result<String, String> {
+    // Helper: look up use_max_completion_tokens from model param_overrides
+    let lookup_umc = |provider_id: &str, model_id: &str, db: &sea_orm::DatabaseConnection| {
+        let pid = provider_id.to_string();
+        let mid = model_id.to_string();
+        let db = db.clone();
+        async move {
+            aqbot_core::repo::provider::get_model(&db, &pid, &mid)
+                .await
+                .ok()
+                .and_then(|m| m.param_overrides)
+                .and_then(|po| po.use_max_completion_tokens)
+        }
+    };
+
+    // Resolve title summary provider/model: settings override → fallback to conversation model
+    if let (Some(ref pid), Some(ref mid)) = (&settings.title_summary_provider_id, &settings.title_summary_model_id) {
+        // Try to use the configured title summary provider
+        let provider = match aqbot_core::repo::provider::get_provider(db, pid).await {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Title summary provider not found, falling back: {}", e);
+                let umc = lookup_umc(&fallback_ctx.provider_id, fallback_model_id, db).await;
+                return generate_ai_title_with(
+                    fallback_provider, fallback_ctx, fallback_model_id,
+                    user_content, assistant_content, settings, umc,
+                ).await;
+            }
+        };
+        let key_row = match aqbot_core::repo::provider::get_active_key(db, pid).await {
+            Ok(k) => k,
+            Err(e) => {
+                tracing::warn!("Title summary provider has no active key, falling back: {}", e);
+                let umc = lookup_umc(&fallback_ctx.provider_id, fallback_model_id, db).await;
+                return generate_ai_title_with(
+                    fallback_provider, fallback_ctx, fallback_model_id,
+                    user_content, assistant_content, settings, umc,
+                ).await;
+            }
+        };
+        let dk = match aqbot_core::crypto::decrypt_key(&key_row.key_encrypted, master_key) {
+            Ok(dk) => dk,
+            Err(e) => {
+                tracing::warn!("Title summary key decrypt failed, falling back: {}", e);
+                let umc = lookup_umc(&fallback_ctx.provider_id, fallback_model_id, db).await;
+                return generate_ai_title_with(
+                    fallback_provider, fallback_ctx, fallback_model_id,
+                    user_content, assistant_content, settings, umc,
+                ).await;
+            }
+        };
+        let proxy = ProviderProxyConfig::resolve(&provider.proxy_config, settings);
+        let ctx = ProviderRequestContext {
+            api_key: dk,
+            key_id: key_row.id.clone(),
+            provider_id: provider.id.clone(),
+            base_url: Some(resolve_base_url(&provider.api_host)),
+            api_path: provider.api_path.clone(),
+            proxy_config: proxy,
+        };
+        let umc = lookup_umc(pid, mid, db).await;
+        generate_ai_title_with(&provider, &ctx, mid, user_content, assistant_content, settings, umc).await
+    } else {
+        // No title summary provider configured, use conversation model
+        let umc = lookup_umc(&fallback_ctx.provider_id, fallback_model_id, db).await;
+        generate_ai_title_with(fallback_provider, fallback_ctx, fallback_model_id, user_content, assistant_content, settings, umc).await
+    }
+}
+
+async fn generate_ai_title_with(
+    provider: &ProviderConfig,
+    ctx: &ProviderRequestContext,
+    model_id: &str,
+    user_content: &str,
+    assistant_content: &str,
+    settings: &AppSettings,
+    use_max_completion_tokens: Option<bool>,
+) -> Result<String, String> {
+    let prompt = settings.title_summary_prompt.as_deref().unwrap_or(DEFAULT_TITLE_PROMPT);
+
+    // Build conversation context for title generation
+    let mut conversation_text = format!("User: {}", user_content);
+    if !assistant_content.is_empty() {
+        // Include a truncated assistant response for better context
+        let assistant_preview: String = assistant_content.chars().take(500).collect();
+        conversation_text.push_str(&format!("\n\nAssistant: {}", assistant_preview));
+    }
+
+    let messages = vec![
+        ChatMessage {
+            role: "system".to_string(),
+            content: ChatContent::Text(prompt.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        },
+        ChatMessage {
+            role: "user".to_string(),
+            content: ChatContent::Text(conversation_text),
+            tool_calls: None,
+            tool_call_id: None,
+        },
+    ];
+
+    let request = ChatRequest {
+        model: model_id.to_string(),
+        messages,
+        stream: false,
+        temperature: settings.title_summary_temperature.map(|v| v as f64).or(Some(0.3)),
+        top_p: settings.title_summary_top_p.map(|v| v as f64),
+        max_tokens: settings.title_summary_max_tokens.or(Some(50)),
+        tools: None,
+        thinking_budget: None,
+        use_max_completion_tokens,
+    };
+
+    tracing::info!("Title generation: provider={}, model={}, base_url={:?}, api_path={:?}, use_max_completion_tokens={:?}",
+        provider.id, model_id, ctx.base_url, ctx.api_path, use_max_completion_tokens);
+
+    let registry = ProviderRegistry::create_default();
+    let registry_key = provider_type_to_registry_key(&provider.provider_type);
+    let adapter = match registry.get(registry_key) {
+        Some(a) => a,
+        None => {
+            let err = format!("Adapter not found for provider type: {}", registry_key);
+            tracing::error!("[title-gen] {}", err);
+            return Err(err);
+        }
+    };
+
+    let response = adapter.chat(ctx, request).await
+        .map_err(|e| {
+            let err = format!("Chat API error: {}", e);
+            tracing::error!("[title-gen] {}", err);
+            err
+        })?;
+
+    let title = response.content.trim()
+        .trim_matches('"')
+        .trim_matches('「').trim_matches('」')
+        .trim_matches('《').trim_matches('》')
+        .to_string();
+    if title.is_empty() {
+        let err = "AI returned empty title".to_string();
+        tracing::error!("[title-gen] {}", err);
+        Err(err)
+    } else {
+        tracing::info!("[title-gen] Generated title: {}", title);
+        Ok(title)
+    }
+}
+
+#[tauri::command]
+pub async fn regenerate_conversation_title(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    conversation_id: String,
+) -> Result<(), String> {
+    let db = state.sea_db.clone();
+    let master_key = state.master_key;
+
+    // Load conversation
+    let conversation = aqbot_core::repo::conversation::get_conversation(&db, &conversation_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Load messages to get first user + assistant content
+    let messages = aqbot_core::repo::message::list_messages(&db, &conversation_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let user_content = messages.iter()
+        .find(|m| m.role == MessageRole::User)
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+    let assistant_content = messages.iter()
+        .find(|m| m.role == MessageRole::Assistant)
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+
+    if user_content.is_empty() {
+        return Err("No user message found to generate title from".to_string());
+    }
+
+    // Load provider for fallback
+    let provider = aqbot_core::repo::provider::get_provider(&db, &conversation.provider_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let key_row = aqbot_core::repo::provider::get_active_key(&db, &provider.id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let decrypted_key = aqbot_core::crypto::decrypt_key(&key_row.key_encrypted, &master_key)
+        .map_err(|e| e.to_string())?;
+
+    let global_settings = aqbot_core::repo::settings::get_settings(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let resolved_proxy = ProviderProxyConfig::resolve(&provider.proxy_config, &global_settings);
+    let ctx = ProviderRequestContext {
+        api_key: decrypted_key,
+        key_id: key_row.id.clone(),
+        provider_id: provider.id.clone(),
+        base_url: Some(resolve_base_url(&provider.api_host)),
+        api_path: provider.api_path.clone(),
+        proxy_config: resolved_proxy,
+    };
+
+    // Emit generating event
+    let _ = app.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+        conversation_id: conversation_id.clone(),
+        generating: true,
+        error: None,
+    });
+
+    // Spawn async task for title generation
+    let app_clone = app.clone();
+    let conv_id = conversation_id.clone();
+    let conv_model_id = conversation.model_id.clone();
+    tokio::spawn(async move {
+        let ai_title = generate_ai_title(
+            &db, &user_content, &assistant_content,
+            &provider, &ctx, &conv_model_id, &global_settings, &master_key,
+        ).await;
+
+        match ai_title {
+            Ok(title) => {
+                if let Err(e) = aqbot_core::repo::conversation::update_conversation_title(
+                    &db, &conv_id, &title,
+                ).await {
+                    tracing::error!("Failed to save regenerated title: {}", e);
+                    let _ = app_clone.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+                        conversation_id: conv_id,
+                        generating: false,
+                        error: Some(format!("Failed to save title: {}", e)),
+                    });
+                } else {
+                    let _ = app_clone.emit("conversation-title-updated", ConversationTitleUpdatedEvent {
+                        conversation_id: conv_id.clone(),
+                        title,
+                    });
+                    let _ = app_clone.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+                        conversation_id: conv_id,
+                        generating: false,
+                        error: None,
+                    });
+                }
+            }
+            Err(err) => {
+                tracing::warn!("Title regeneration failed: {}", err);
+                let _ = app_clone.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+                    conversation_id: conv_id,
+                    generating: false,
+                    error: Some(err),
+                });
+            }
+        }
+    });
+
+    Ok(())
+}
+
 /// Spawn the streaming background task shared by send_message and regenerate_message.
 /// Returns the assistant message_id that will be populated as chunks arrive.
 fn spawn_stream_task(
@@ -417,6 +691,8 @@ fn spawn_stream_task(
     override_created_at: Option<i64>,
     use_max_completion_tokens: Option<bool>,
     force_max_tokens: Option<bool>,
+    settings: AppSettings,
+    master_key: [u8; 32],
 ) {
     let model_id = conversation.model_id.clone();
 
@@ -656,21 +932,74 @@ fn spawn_stream_task(
 
         // Auto-title: if this is the first user message, set conversation title
         if is_first_message {
-            let title = if user_content.chars().count() > 30 {
+            // Set truncated title immediately for instant feedback
+            let fallback_title = if user_content.chars().count() > 30 {
                 format!("{}...", user_content.chars().take(30).collect::<String>())
             } else {
                 user_content.clone()
             };
 
             if let Err(e) = aqbot_core::repo::conversation::update_conversation_title(
-                &db, &conversation_id, &title,
+                &db, &conversation_id, &fallback_title,
             ).await {
                 tracing::error!("Failed to auto-update title: {}", e);
             } else {
                 let _ = app.emit("conversation-title-updated", ConversationTitleUpdatedEvent {
                     conversation_id: conversation_id.clone(),
-                    title,
+                    title: fallback_title,
                 });
+            }
+
+            // Notify frontend that title generation is starting
+            let _ = app.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+                conversation_id: conversation_id.clone(),
+                generating: true,
+                error: None,
+            });
+
+            // Try AI-powered title generation
+            let ai_title = generate_ai_title(
+                &db,
+                &user_content,
+                &total_content,
+                &provider,
+                &ctx,
+                &model_id,
+                &settings,
+                &master_key,
+            ).await;
+
+            match ai_title {
+                Ok(title) => {
+                    if let Err(e) = aqbot_core::repo::conversation::update_conversation_title(
+                        &db, &conversation_id, &title,
+                    ).await {
+                        tracing::error!("Failed to update AI-generated title: {}", e);
+                        let _ = app.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+                            conversation_id: conversation_id.clone(),
+                            generating: false,
+                            error: Some(format!("Failed to save title: {}", e)),
+                        });
+                    } else {
+                        let _ = app.emit("conversation-title-updated", ConversationTitleUpdatedEvent {
+                            conversation_id: conversation_id.clone(),
+                            title,
+                        });
+                        let _ = app.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+                            conversation_id: conversation_id.clone(),
+                            generating: false,
+                            error: None,
+                        });
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!("Auto title generation failed: {}", err);
+                    let _ = app.emit("conversation-title-generating", ConversationTitleGeneratingEvent {
+                        conversation_id: conversation_id.clone(),
+                        generating: false,
+                        error: Some(err),
+                    });
+                }
             }
         }
     });
@@ -1024,6 +1353,8 @@ pub async fn send_message(
         None,
         use_max_completion_tokens,
         force_max_tokens,
+        global_settings,
+        state.master_key,
     );
 
     // Return the user message immediately
@@ -1299,6 +1630,8 @@ pub async fn regenerate_message(
         original_created_at,
         use_max_completion_tokens,
         force_max_tokens,
+        global_settings,
+        state.master_key,
     );
 
     Ok(())
@@ -1536,6 +1869,8 @@ pub async fn regenerate_with_model(
         original_created_at,
         use_max_completion_tokens,
         force_max_tokens,
+        global_settings,
+        state.master_key,
     );
 
     Ok(())

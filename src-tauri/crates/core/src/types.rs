@@ -736,6 +736,14 @@ pub struct ConversationTitleUpdatedEvent {
     pub title: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationTitleGeneratingEvent {
+    pub conversation_id: String,
+    pub generating: bool,
+    /// Error message if generation failed
+    pub error: Option<String>,
+}
+
 // === Embedding Types ===
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
