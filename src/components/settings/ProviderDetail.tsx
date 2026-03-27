@@ -175,6 +175,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [editNoSystemRole, setEditNoSystemRole] = useState(false);
   const [editForceMaxTokens, setEditForceMaxTokens] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [providerIconPickerOpen, setProviderIconPickerOpen] = useState(false);
   const [iconOverrides, setIconOverrides] = useState<Record<string, string>>({});
   const [apiHostLocal, setApiHostLocal] = useState(provider?.api_host ?? '');
   const [apiPathLocal, setApiPathLocal] = useState(provider?.api_path ?? '');
@@ -616,7 +617,15 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <SmartProviderIcon provider={provider} size={40} type="avatar" shape="square" />
+          <AvatarEditBadge size={40}>
+            <div
+              className="cursor-pointer rounded-lg p-0.5 transition-colors hover:opacity-80"
+              onClick={() => setProviderIconPickerOpen(true)}
+              title={t('settings.chooseIcon')}
+            >
+              <SmartProviderIcon provider={provider} size={40} type="avatar" shape="square" />
+            </div>
+          </AvatarEditBadge>
           <div>
             <div className="flex items-center gap-2">
               <Title level={4} className="!mb-0">
@@ -1398,7 +1407,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
         )}
       </Modal>
 
-      {/* Icon Picker Modal */}
+      {/* Model Icon Picker Modal */}
       <IconPickerModal
         open={iconPickerOpen}
         onClose={() => setIconPickerOpen(false)}
@@ -1406,6 +1415,17 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
           if (editingModel) {
             setIconOverrides((prev) => ({ ...prev, [editingModel.model_id]: iconId }));
           }
+        }}
+      />
+
+      {/* Provider Icon Picker Modal */}
+      <IconPickerModal
+        open={providerIconPickerOpen}
+        onClose={() => setProviderIconPickerOpen(false)}
+        defaultTab="provider"
+        onSelect={(iconId, group) => {
+          const iconValue = `${group}:${iconId}`;
+          updateProvider(providerId, { icon: iconValue });
         }}
       />
 

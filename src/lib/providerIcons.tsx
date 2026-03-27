@@ -101,6 +101,15 @@ export const SmartProviderIcon = memo(function SmartProviderIcon({
   type?: 'avatar' | 'color' | 'mono';
   shape?: 'circle' | 'square';
 }) {
+  if (provider.icon) {
+    const [group, key] = provider.icon.includes(':')
+      ? (provider.icon.split(':', 2) as ['model' | 'provider', string])
+      : ['model' as const, provider.icon];
+    if (group === 'provider') {
+      return <ProviderIcon provider={key} size={size} type={type} shape={shape} />;
+    }
+    return <ModelIcon model={key} size={size} type={type} />;
+  }
   const result = resolveProviderIcon(provider);
   if (result.type === 'model') {
     return <ModelIcon model={result.key} size={size} type={type} />;

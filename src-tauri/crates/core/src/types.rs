@@ -24,6 +24,7 @@ pub struct ProviderConfig {
     pub keys: Vec<ProviderKey>,
     pub proxy_config: Option<ProviderProxyConfig>,
     pub custom_headers: Option<String>,
+    pub icon: Option<String>,
     pub sort_order: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -104,6 +105,7 @@ pub struct UpdateProviderInput {
     pub enabled: Option<bool>,
     pub proxy_config: Option<ProviderProxyConfig>,
     pub custom_headers: Option<Option<String>>,
+    pub icon: Option<Option<String>>,
     pub sort_order: Option<i32>,
 }
 

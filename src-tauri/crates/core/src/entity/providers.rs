@@ -13,6 +13,7 @@ pub struct Model {
     pub enabled: i32,
     pub proxy_config: Option<String>,
     pub custom_headers: Option<String>,
+    pub icon: Option<String>,
     pub sort_order: i32,
     pub created_at: i64,
     pub updated_at: i64,

@@ -2,20 +2,25 @@ import { Input, Modal, Tabs, theme } from 'antd';
 import { Search } from 'lucide-react';
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 import toc from '@lobehub/icons/es/toc';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface IconPickerModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (iconId: string) => void;
+  onSelect: (iconId: string, group: 'model' | 'provider') => void;
+  defaultTab?: 'model' | 'provider';
 }
 
-export default function IconPickerModal({ open, onClose, onSelect }: IconPickerModalProps) {
+export default function IconPickerModal({ open, onClose, onSelect, defaultTab = 'model' }: IconPickerModalProps) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('model');
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
+
+  useEffect(() => {
+    if (open) setActiveTab(defaultTab);
+  }, [open, defaultTab]);
 
   const filteredIcons = useMemo(() => {
     const s = search.toLowerCase();
@@ -27,7 +32,7 @@ export default function IconPickerModal({ open, onClose, onSelect }: IconPickerM
   }, [search, activeTab]);
 
   const handleSelect = (iconId: string) => {
-    onSelect(iconId);
+    onSelect(iconId, activeTab as 'model' | 'provider');
     onClose();
     setSearch('');
   };
