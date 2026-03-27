@@ -1,65 +1,154 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Dropdown } from 'antd';
-import { Copy } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Copy, TextCursorInput, Bug } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { theme, message } from 'antd';
+import { invoke } from '@tauri-apps/api/core';
+import { useConversationStore } from '@/stores';
 
 /**
- * Global right-click context menu (production only).
- * - When text is selected: shows a "Copy" menu at the cursor position.
- * - When no text is selected: suppresses the native context menu.
- * - Skips when a component-specific context menu already handled the event
- *   (detected via `e.defaultPrevented`, e.g. ChatSidebar's conversation menu).
- * - In dev mode, native context menu is preserved for browser DevTools access.
+ * Global right-click context menu.
+ * - Text selected → Copy + (Fill to Input in chat) + (DevTools in dev)
+ * - No text, dev mode → DevTools only
+ * - No text, prod mode → suppress native menu
+ * - Skips when a component-specific context menu already handled the event.
  */
 export function GlobalCopyMenu() {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [inChatMessages, setInChatMessages] = useState(false);
+  const selectedTextRef = useRef('');
+  const menuRef = useRef<HTMLDivElement>(null);
+  const activeConversationId = useConversationStore((s) => s.activeConversationId);
+  const isDev = import.meta.env.DEV;
 
   useEffect(() => {
-    // In dev mode, preserve native context menu for browser DevTools
-    if (import.meta.env.DEV) return;
-
     const handler = (e: MouseEvent) => {
       if (e.defaultPrevented) return;
+      if (menuRef.current?.contains(e.target as Node)) return;
       e.preventDefault();
 
-      const sel = window.getSelection()?.toString().trim();
+      const sel = window.getSelection()?.toString().trim() || '';
+      selectedTextRef.current = sel;
+
+      // "Fill to input" only when right-clicking inside chat message area
+      const inMessageArea = !!(e.target as HTMLElement).closest?.('[data-message-area]');
+      setInChatMessages(inMessageArea);
+
       if (sel) {
+        setHasSelection(true);
         setMenuPos({ x: e.clientX, y: e.clientY });
+      } else if (isDev) {
+        setHasSelection(false);
+        setMenuPos({ x: e.clientX, y: e.clientY });
+      } else {
+        setMenuPos(null);
       }
     };
 
+    const dismissHandler = () => setMenuPos(null);
+
     document.addEventListener('contextmenu', handler);
-    return () => document.removeEventListener('contextmenu', handler);
-  }, []);
+    document.addEventListener('click', dismissHandler);
+    document.addEventListener('scroll', dismissHandler, true);
+    return () => {
+      document.removeEventListener('contextmenu', handler);
+      document.removeEventListener('click', dismissHandler);
+      document.removeEventListener('scroll', dismissHandler, true);
+    };
+  }, [isDev]);
 
   const handleCopy = useCallback(() => {
-    const sel = window.getSelection()?.toString();
-    if (sel) void navigator.clipboard.writeText(sel);
+    const text = selectedTextRef.current;
+    if (text) {
+      void navigator.clipboard.writeText(text);
+      message.success(t('common.copySuccess', '已复制到剪贴板'));
+    }
+    setMenuPos(null);
+  }, [t]);
+
+  const handleFillInput = useCallback(() => {
+    const text = selectedTextRef.current;
+    if (text) {
+      window.dispatchEvent(new CustomEvent('aqbot:fill-input', { detail: text }));
+    }
+    setMenuPos(null);
+  }, []);
+
+  const handleOpenDevtools = useCallback(() => {
+    void invoke('open_devtools');
     setMenuPos(null);
   }, []);
 
   if (!menuPos) return null;
 
+  interface MenuItem {
+    key: string;
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+  }
+
+  const items: MenuItem[] = [];
+
+  if (hasSelection) {
+    items.push(
+      { key: 'copy', icon: <Copy size={14} />, label: t('common.copy', '复制'), onClick: handleCopy },
+    );
+    if (activeConversationId && inChatMessages) {
+      items.push({
+        key: 'fill',
+        icon: <TextCursorInput size={14} />,
+        label: t('common.fillToInput', '填充到输入框'),
+        onClick: handleFillInput,
+      });
+    }
+  }
+
+  if (isDev) {
+    items.push({
+      key: 'devtools',
+      icon: <Bug size={14} />,
+      label: t('common.openDevtools', '打开开发者工具'),
+      onClick: handleOpenDevtools,
+    });
+  }
+
   return (
-    <Dropdown
-      open
-      onOpenChange={(open) => { if (!open) setMenuPos(null); }}
-      menu={{
-        items: [{ key: 'copy', label: t('common.copy', '复制'), icon: <Copy size={14} /> }],
-        onClick: handleCopy,
+    <div
+      ref={menuRef}
+      style={{
+        position: 'fixed',
+        left: menuPos.x,
+        top: menuPos.y,
+        zIndex: 9999,
+        backgroundColor: token.colorBgElevated,
+        borderRadius: 8,
+        boxShadow: token.boxShadowSecondary,
+        padding: '4px',
+        minWidth: 120,
       }}
     >
-      <div
-        style={{
-          position: 'fixed',
-          left: menuPos.x,
-          top: menuPos.y,
-          width: 0,
-          height: 0,
-          pointerEvents: 'none',
-        }}
-      />
-    </Dropdown>
+      {items.map((item) => (
+        <div
+          key={item.key}
+          className="flex items-center gap-2 cursor-pointer"
+          style={{
+            padding: '6px 12px',
+            borderRadius: 4,
+            fontSize: 13,
+            color: token.colorText,
+            transition: 'background-color 0.15s',
+          }}
+          onClick={item.onClick}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = token.colorFillSecondary; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        >
+          {item.icon}
+          <span>{item.label}</span>
+        </div>
+      ))}
+    </div>
   );
 }

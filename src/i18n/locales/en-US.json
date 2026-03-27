@@ -689,6 +689,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "copySuccess": "Copied to clipboard",
+    "fillToInput": "Fill to input",
+    "openDevtools": "Open DevTools",
     "decrease": "Decrease",
     "enabled": "Enabled",
     "disabled": "Disabled",

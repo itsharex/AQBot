@@ -574,6 +574,24 @@ export function InputArea() {
     t,
   ]);
 
+  // Listen for "fill input" events from GlobalCopyMenu
+  React.useEffect(() => {
+    const onFillInput = (e: Event) => {
+      const text = (e as CustomEvent).detail;
+      if (typeof text !== 'string' || !text) return;
+      setValue((prev) => (prev ? prev + '\n' + text : text));
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.style.height = 'auto';
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+      });
+    };
+    window.addEventListener('aqbot:fill-input', onFillInput);
+    return () => window.removeEventListener('aqbot:fill-input', onFillInput);
+  }, []);
+
   return (
     <div className="px-4 pb-3 pt-1">
       <input
