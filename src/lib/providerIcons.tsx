@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { ProviderConfig } from '@/types';
 import { ProviderIcon, ModelIcon, providerMappings, modelMappings } from '@lobehub/icons';
+import { DynamicLobeIcon } from '@/components/shared/DynamicLobeIcon';
 
 const TYPE_TO_PROVIDER: Record<string, string> = {
   openai: 'openai',
@@ -102,13 +103,11 @@ export const SmartProviderIcon = memo(function SmartProviderIcon({
   shape?: 'circle' | 'square';
 }) {
   if (provider.icon) {
-    const [group, key] = provider.icon.includes(':')
-      ? (provider.icon.split(':', 2) as ['model' | 'provider', string])
+    const [, key] = provider.icon.includes(':')
+      ? (provider.icon.split(':', 2) as [string, string])
       : ['model' as const, provider.icon];
-    if (group === 'provider') {
-      return <ProviderIcon provider={key} size={size} type={type} shape={shape} />;
-    }
-    return <ModelIcon model={key} size={size} type={type} />;
+    // key is a toc `id` (e.g., "Ai302", "OpenAI") — use DynamicLobeIcon for reliable rendering
+    return <DynamicLobeIcon iconId={key} size={size} type={type} />;
   }
   const result = resolveProviderIcon(provider);
   if (result.type === 'model') {

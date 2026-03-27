@@ -1,9 +1,9 @@
 import { Input, Modal, Tabs, theme } from 'antd';
 import { Search } from 'lucide-react';
-import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 import toc from '@lobehub/icons/es/toc';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DynamicLobeIcon } from '@/components/shared/DynamicLobeIcon';
 
 interface IconPickerModalProps {
   open: boolean;
@@ -71,29 +71,24 @@ export default function IconPickerModal({ open, onClose, onSelect, defaultTab = 
 
       <div
         className="grid grid-cols-6 gap-2 overflow-y-auto pr-1"
+        data-os-scrollbar
         style={{ maxHeight: 360 }}
       >
         {filteredIcons.map((icon) => (
           <div
             key={icon.id}
-            className="flex flex-col items-center gap-1 p-2 rounded-lg cursor-pointer transition-colors"
-            style={{ border: '1px solid var(--border-color)' }}
-            onClick={() => handleSelect(icon.title)}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = token.colorPrimaryBg;
-              (e.currentTarget as HTMLElement).style.borderColor = token.colorPrimary;
+            className="icon-picker-item flex flex-col items-center gap-1 p-2 rounded-lg cursor-pointer transition-colors"
+            style={{
+              border: `1px solid ${token.colorBorderSecondary}`,
             }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-              (e.currentTarget as HTMLElement).style.borderColor = '';
-            }}
+            onClick={() => handleSelect(icon.id)}
             title={icon.fullTitle}
           >
-            {activeTab === 'provider' ? (
-              <ProviderIcon provider={icon.title} size={24} type="color" />
-            ) : (
-              <ModelIcon model={icon.title} size={24} type="avatar" />
-            )}
+            <DynamicLobeIcon
+              iconId={icon.id}
+              size={24}
+              type={icon.param.hasColor ? 'color' : 'avatar'}
+            />
             <span
               className="text-xs text-center truncate w-full"
               style={{ color: token.colorTextSecondary }}
@@ -111,6 +106,13 @@ export default function IconPickerModal({ open, onClose, onSelect, defaultTab = 
           </div>
         )}
       </div>
+
+      <style>{`
+        .icon-picker-item:hover {
+          background-color: ${token.colorPrimaryBg} !important;
+          border-color: ${token.colorPrimary} !important;
+        }
+      `}</style>
     </Modal>
   );
 }

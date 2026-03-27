@@ -33,6 +33,7 @@ import { SmartProviderIcon } from '@/lib/providerIcons';
 import { getEditableCapabilities, getVisibleModelCapabilities, sanitizeModelCapabilities } from '@/lib/modelCapabilities';
 import IconPickerModal from './IconPickerModal';
 import { AvatarEditBadge } from '@/components/shared/AvatarEditBadge';
+import { DynamicLobeIcon } from '@/components/shared/DynamicLobeIcon';
 import type { Model, ModelCapability, ModelType, ModelParamOverrides, ProviderType } from '@/types';
 
 const { Text, Title } = Typography;
@@ -979,7 +980,10 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                     className="flex items-center gap-2 px-2 py-1.5 rounded-md"
                     style={{ opacity: model.enabled ? 1 : 0.45, paddingLeft: 36 }}
                   >
-                    <ModelIcon model={iconOverrides[model.model_id] ?? model.model_id} size={20} type="avatar" />
+                    {iconOverrides[model.model_id]
+                      ? <DynamicLobeIcon iconId={iconOverrides[model.model_id]} size={20} type="avatar" />
+                      : <ModelIcon model={model.model_id} size={20} type="avatar" />
+                    }
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1 flex-wrap">
                         <span>{model.name || model.model_id}</span>
@@ -1255,11 +1259,10 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                   onClick={() => setIconPickerOpen(true)}
                   title={t('settings.chooseIcon')}
                 >
-                  <ModelIcon
-                    model={iconOverrides[editingModel.model_id] ?? editingModel.model_id}
-                    size={32}
-                    type="avatar"
-                  />
+                  {iconOverrides[editingModel.model_id]
+                    ? <DynamicLobeIcon iconId={iconOverrides[editingModel.model_id]} size={32} type="avatar" />
+                    : <ModelIcon model={editingModel.model_id} size={32} type="avatar" />
+                  }
                 </div>
               </AvatarEditBadge>
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
