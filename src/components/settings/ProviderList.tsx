@@ -99,7 +99,7 @@ function SortableProviderItem({
         className="min-w-0 flex-1 flex items-center gap-2"
         style={{ opacity: disabled ? 0.4 : 1 }}
       >
-        <SmartProviderIcon provider={provider} size={22} type="color" />
+        <SmartProviderIcon provider={provider} size={22} type="avatar" />
         <span style={{ color: isSelected ? token.colorPrimary : undefined }}>{provider.name}</span>
       </div>
       <Switch

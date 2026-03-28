@@ -114,4 +114,11 @@ export const SmartProviderIcon = memo(function SmartProviderIcon({
     return <ModelIcon model={result.key} size={size} type={type} />;
   }
   return <ProviderIcon provider={result.key} size={size} type={type} shape={shape} />;
-});
+}, (prev, next) =>
+  prev.provider.icon === next.provider.icon
+  && prev.provider.name === next.provider.name
+  && prev.provider.provider_type === next.provider.provider_type
+  && prev.size === next.size
+  && prev.type === next.type
+  && prev.shape === next.shape
+);
