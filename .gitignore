@@ -40,3 +40,8 @@ progress.md
 
 # Local git worktrees
 .worktrees/
+
+# Website (VitePress)
+website/node_modules/
+website/docs/.vitepress/cache/
+website/docs/.vitepress/dist/
