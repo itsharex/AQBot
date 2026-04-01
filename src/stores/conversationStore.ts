@@ -60,6 +60,7 @@ let _multiModelDoneResolve: (() => void) | null = null;
 let _isMultiModelActive = false;
 let _multiModelFirstModelId: string | null = null; // model_id of the first selected model (for auto-switch)
 let _multiModelFirstMessageId: string | null = null; // actual DB message_id of the first model's response
+let _userManuallySelectedVersion = false; // tracks if user manually switched version during multi-model streaming
 
 type ConversationPreferenceState = Pick<
   ConversationState,
@@ -1428,6 +1429,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       _multiModelTotalRemaining = 0;
       _multiModelFirstModelId = null;
       _multiModelFirstMessageId = null;
+      _userManuallySelectedVersion = false;
       set({ pendingCompanionModels: [], multiModelParentId: null, multiModelDoneMessageIds: [] });
       return;
     }
@@ -1443,6 +1445,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       _multiModelTotalRemaining = 0;
       _multiModelFirstModelId = null;
       _multiModelFirstMessageId = null;
+      _userManuallySelectedVersion = false;
       set({ pendingCompanionModels: [], multiModelParentId: null, multiModelDoneMessageIds: [] });
       if (originalProviderId && originalModelId) {
         void get().updateConversation(conversationId, { provider_id: originalProviderId, model_id: originalModelId });
@@ -1589,14 +1592,20 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
     // Final fetch for consistency
     if (get().activeConversationId === conversationId) {
-      // Switch to the first model's version BEFORE fetching so DB state is correct
       const parentId = get().multiModelParentId;
-      if (parentId) {
+
+      // Determine which version to show: if user manually selected a version, respect that choice
+      const userSelectedMessageId = _userManuallySelectedVersion
+        ? get().messages.find(
+            (m) => m.parent_message_id === parentId && m.role === 'assistant' && m.is_active,
+          )?.id ?? null
+        : null;
+
+      if (parentId && !_userManuallySelectedVersion) {
+        // No manual selection — switch to the first model's version
         const firstModelId = companionModels[0].modelId;
-        // Try to switch using tracked message_id first (most reliable), fall back to model_id match
         let targetMessageId = _multiModelFirstMessageId;
         if (!targetMessageId) {
-          // Fallback: find by model_id in current local messages
           const localMatch = get().messages.find(
             (m) => m.parent_message_id === parentId && m.role === 'assistant' && m.model_id === firstModelId,
           );
@@ -1609,35 +1618,48 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
             messageId: targetMessageId,
           }).catch(() => {});
         }
+      } else if (parentId && userSelectedMessageId) {
+        // User manually selected a version — sync that to backend
+        await invoke('switch_message_version', {
+          conversationId,
+          parentMessageId: parentId,
+          messageId: userSelectedMessageId,
+        }).catch(() => {});
       }
 
       await get().fetchMessages(conversationId);
 
-      // Ensure only the first model's version is shown locally
+      // Ensure only one version is shown locally
       if (parentId) {
         const refreshedMsgs = get().messages;
-        const firstModelId = companionModels[0].modelId;
-        // Find the first model version (prefer tracked message_id, then model_id match, then earliest)
-        let firstModelVersion = _multiModelFirstMessageId
-          ? refreshedMsgs.find((m) => m.id === _multiModelFirstMessageId)
-          : null;
-        if (!firstModelVersion) {
-          firstModelVersion = refreshedMsgs.find(
-            (m) => m.parent_message_id === parentId && m.role === 'assistant' && m.model_id === firstModelId,
-          ) ?? null;
+
+        // Determine which version to display
+        let displayVersion: Message | null = null;
+        if (_userManuallySelectedVersion && userSelectedMessageId) {
+          displayVersion = refreshedMsgs.find((m) => m.id === userSelectedMessageId) ?? null;
         }
-        if (firstModelVersion) {
-          // Local: keep only the active version in messages array, hide siblings
+        if (!displayVersion) {
+          const firstModelId = companionModels[0].modelId;
+          displayVersion = _multiModelFirstMessageId
+            ? refreshedMsgs.find((m) => m.id === _multiModelFirstMessageId) ?? null
+            : null;
+          if (!displayVersion) {
+            displayVersion = refreshedMsgs.find(
+              (m) => m.parent_message_id === parentId && m.role === 'assistant' && m.model_id === firstModelId,
+            ) ?? null;
+          }
+        }
+
+        if (displayVersion) {
           set((s) => {
             let kept = false;
             return {
               messages: s.messages.reduce<Message[]>((acc, m) => {
                 if (m.parent_message_id === parentId && m.role === 'assistant') {
                   if (!kept) {
-                    acc.push({ ...firstModelVersion, is_active: true });
+                    acc.push({ ...displayVersion, is_active: true });
                     kept = true;
                   }
-                  // Skip other siblings (accessible via ModelTags → listMessageVersions)
                 } else {
                   acc.push(m);
                 }
@@ -1650,6 +1672,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
 
     _multiModelFirstMessageId = null;
+    _userManuallySelectedVersion = false;
     set({ multiModelParentId: null, multiModelDoneMessageIds: [] });
   },
 
@@ -1968,6 +1991,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       _multiModelTotalRemaining = 0;
       _multiModelFirstModelId = null;
       _multiModelFirstMessageId = null;
+      _userManuallySelectedVersion = false;
       if (_multiModelDoneResolve) {
         const r = _multiModelDoneResolve;
         _multiModelDoneResolve = null;
@@ -2005,6 +2029,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         // 2. invoke delay causing stale content display
         // 3. Potential invoke failures during active streaming
         // Just swap is_active flags in-memory; backend will be synced during cleanup.
+        _userManuallySelectedVersion = true;
         set((s) => {
           const targetExists = s.messages.some(
             (m) => m.id === messageId && m.parent_message_id === parentMessageId && m.role === 'assistant',
