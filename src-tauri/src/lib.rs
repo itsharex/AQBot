@@ -331,9 +331,30 @@ pub fn run() {
             aqbot_core::vector_store::register_sqlite_vec_extension();
 
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let db_handle = rt
-                .block_on(db::create_pool(&db_path))
-                .expect("failed to init db");
+            let db_handle = match rt.block_on(db::create_pool(&db_path)) {
+                Ok(h) => h,
+                Err(e) => {
+                    let msg = format!(
+                        "数据库初始化失败: {}\n\n\
+                         如果您从新版本回退到旧版本，数据库结构可能不兼容。\n\
+                         请使用最新版本的 AQBot。",
+                        e
+                    );
+                    tracing::error!("{}", msg);
+                    // Show native dialog on macOS so user sees the error
+                    #[cfg(target_os = "macos")]
+                    {
+                        let escaped = msg.replace('\"', "\\\"").replace('\n', "\\n");
+                        let _ = std::process::Command::new("osascript")
+                            .args(["-e", &format!(
+                                "display dialog \"{}\" with title \"AQBot\" buttons {{\"OK\"}} default button \"OK\" with icon stop",
+                                escaped
+                            )])
+                            .output();
+                    }
+                    std::process::exit(1);
+                }
+            };
 
             // Initialize vector store (shares the sea-orm SQLite connection)
             let vector_store =
