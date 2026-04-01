@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import { Button, Input, App, theme, Tooltip, Avatar, Checkbox, Dropdown, Empty } from 'antd'
-import { MessageSquarePlus, Search, Archive, ListTodo, Trash2, Pencil, Share, Pin, PinOff, Loader, X, Undo2, ArrowLeft, FileImage, FileCode, FileType, FileText, FolderPlus, FolderOpen } from 'lucide-react'
+import { MessageSquarePlus, Search, Archive, ListTodo, Trash2, Pencil, Share, Pin, PinOff, Loader, X, Undo2, ArrowLeft, FileImage, FileCode, FileType, FileText, FolderPlus, FolderOpen, GripVertical } from 'lucide-react'
 import { ModelIcon } from '@lobehub/icons'
 import { getConvIcon } from '@/lib/convIcon'
 import { exportAsMarkdown, exportAsText, exportAsPNG, exportAsJSON } from '@/lib/exportChat'
@@ -15,6 +15,19 @@ import type { Conversation, Message, ConversationCategory } from '@/types'
 import { useResolvedAvatarSrc } from '@/hooks/useResolvedAvatarSrc'
 import type { AvatarType } from '@/stores/userProfileStore'
 import { CategoryEditModal } from './CategoryEditModal'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+  type DragOverEvent,
+} from '@dnd-kit/core'
 
 function getDateGroup(timestamp: number): string {
   const now = new Date()
@@ -48,6 +61,60 @@ const CategoryIcon = memo(function CategoryIcon({ cat, size = 14 }: { cat: Conve
   return <FolderOpen size={size - 1} />
 })
 
+function SortableCategoryLabel({
+  cat,
+  onEdit,
+  onDelete,
+  menuActionRef,
+  editLabel,
+  deleteLabel,
+}: {
+  cat: ConversationCategory
+  onEdit: () => void
+  onDelete: () => void
+  menuActionRef: React.MutableRefObject<boolean>
+  editLabel: string
+  deleteLabel: string
+}) {
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: cat.id })
+  const { setNodeRef: setDropRef } = useDroppable({ id: cat.id })
+  const mergedRef = useCallback((node: HTMLDivElement | null) => {
+    setDragRef(node)
+    setDropRef(node)
+  }, [setDragRef, setDropRef])
+
+  return (
+    <Dropdown
+      trigger={['contextMenu']}
+      menu={{
+        items: [
+          { key: 'edit', label: editLabel, icon: <Pencil size={14} /> },
+          { key: 'delete', label: deleteLabel, icon: <Trash2 size={14} />, danger: true },
+        ],
+        onClick: ({ key, domEvent }) => {
+          domEvent.stopPropagation()
+          menuActionRef.current = true
+          setTimeout(() => { menuActionRef.current = false }, 100)
+          if (key === 'edit') onEdit()
+          else if (key === 'delete') onDelete()
+        },
+      }}
+    >
+      <div
+        ref={mergedRef}
+        className="flex items-center gap-1"
+        style={{ opacity: isDragging ? 0.3 : 1, cursor: 'pointer', userSelect: 'none', flex: 1 }}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={12} style={{ opacity: 0.4, cursor: 'grab', flexShrink: 0 }} />
+        <CategoryIcon cat={cat} size={14} />
+        <span className="truncate">{cat.name}</span>
+      </div>
+    </Dropdown>
+  )
+}
+
 export function ChatSidebar() {
   const { t } = useTranslation()
   const { token } = theme.useToken()
@@ -76,6 +143,62 @@ export function ChatSidebar() {
   const updateCategory = useCategoryStore((s) => s.updateCategory)
   const deleteCategory = useCategoryStore((s) => s.deleteCategory)
   const setCollapsed = useCategoryStore((s) => s.setCollapsed)
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  )
+
+  const [activeDragCatId, setActiveDragCatId] = useState<string | null>(null)
+  const dragInitialOrderRef = useRef<string[]>([])
+
+  const handleCategoryDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragCatId(String(event.active.id))
+    dragInitialOrderRef.current = categories.map((c) => c.id)
+  }, [categories])
+
+  const handleCategoryDragOver = useCallback((event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const ids = categories.map((c) => c.id)
+    const oldIndex = ids.indexOf(String(active.id))
+    const newIndex = ids.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+    const newIds = [...ids]
+    newIds.splice(oldIndex, 1)
+    newIds.splice(newIndex, 0, String(active.id))
+    useCategoryStore.setState((s) => ({
+      categories: newIds
+        .map((id, i) => {
+          const c = s.categories.find((cat) => cat.id === id)
+          return c ? { ...c, sort_order: i } : null
+        })
+        .filter(Boolean) as ConversationCategory[],
+    }))
+  }, [categories])
+
+  const handleCategoryDragEnd = useCallback(
+    (_event: DragEndEvent) => {
+      setActiveDragCatId(null)
+      // Always persist current order (onDragOver already updated store)
+      const ids = useCategoryStore.getState().categories.map((c) => c.id)
+      void invoke('reorder_conversation_categories', { categoryIds: ids })
+    },
+    [],
+  )
+
+  const handleCategoryDragCancel = useCallback(() => {
+    setActiveDragCatId(null)
+    const initial = dragInitialOrderRef.current
+    if (initial.length > 0) {
+      useCategoryStore.setState((s) => ({
+        categories: initial
+          .map((id, i) => {
+            const c = s.categories.find((cat) => cat.id === id)
+            return c ? { ...c, sort_order: i } : null
+          })
+          .filter(Boolean) as ConversationCategory[],
+      }))
+    }
+  }, [])
 
   const shortcutHint = useCallback((label: string, action: ShortcutAction) => {
     if (!settings) return label
@@ -334,10 +457,54 @@ export function ChatSidebar() {
     () => {
       const items: ConversationItemType[] = []
 
-      // Add placeholder items for empty categories so their group headers render
-      const usedCatIds = new Set(filteredConversations.filter((c) => c.category_id).map((c) => c.category_id!))
+      // Group conversations by category_id for ordered insertion
+      const convsByCatId = new Map<string, typeof filteredConversations>()
+      const uncategorizedConvs: typeof filteredConversations = []
+      filteredConversations.forEach((conv) => {
+        if (conv.category_id) {
+          const arr = convsByCatId.get(conv.category_id) ?? []
+          arr.push(conv)
+          convsByCatId.set(conv.category_id, arr)
+        } else {
+          uncategorizedConvs.push(conv)
+        }
+      })
+
+      const buildConvItem = (conv: Conversation, group: string) => {
+        const icon = buildIcon(conv)
+        const label = conv.is_pinned ? (
+          <span className="flex items-center gap-1">
+            <span className="truncate">{conv.title}</span>
+            <Pin size={12} style={{ color: token.colorTextQuaternary, flexShrink: 0 }} />
+          </span>
+        ) : conv.title
+        if (multiSelectMode) {
+          return {
+            key: conv.id,
+            label,
+            icon: (
+              <span className="flex items-center gap-1.5">
+                <Checkbox
+                  checked={selectedIds.has(conv.id)}
+                  onChange={() => toggleSelect(conv.id)}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                />
+                {icon}
+              </span>
+            ),
+            group,
+            'data-conv-id': conv.id,
+          }
+        }
+        return { key: conv.id, label, icon, group, 'data-conv-id': conv.id }
+      }
+
+      // Add category items in sort_order — ensures group rendering order matches drag order
       categories.forEach((cat) => {
-        if (!usedCatIds.has(cat.id)) {
+        const catConvs = convsByCatId.get(cat.id)
+        if (catConvs && catConvs.length > 0) {
+          catConvs.forEach((conv) => items.push(buildConvItem(conv, `cat:${cat.id}`)))
+        } else {
           items.push({
             key: `__empty_cat_${cat.id}`,
             label: (
@@ -353,43 +520,10 @@ export function ChatSidebar() {
         }
       })
 
-      filteredConversations.forEach((conv: Conversation) => {
-        const icon = buildIcon(conv)
-        const group = conv.category_id
-          ? `cat:${conv.category_id}`
-          : conv.is_pinned ? 'pinned' : getDateGroup(conv.updated_at)
-        const label = conv.is_pinned ? (
-          <span className="flex items-center gap-1">
-            <span className="truncate">{conv.title}</span>
-            <Pin size={12} style={{ color: token.colorTextQuaternary, flexShrink: 0 }} />
-          </span>
-        ) : conv.title
-        if (multiSelectMode) {
-          items.push({
-            key: conv.id,
-            label,
-            icon: (
-              <span className="flex items-center gap-1.5">
-                <Checkbox
-                  checked={selectedIds.has(conv.id)}
-                  onChange={() => toggleSelect(conv.id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                {icon}
-              </span>
-            ),
-            group,
-            'data-conv-id': conv.id,
-          })
-        } else {
-          items.push({
-            key: conv.id,
-            label,
-            icon,
-            group,
-            'data-conv-id': conv.id,
-          })
-        }
+      // Add uncategorized conversations (pinned + time groups)
+      uncategorizedConvs.forEach((conv) => {
+        const group = conv.is_pinned ? 'pinned' : getDateGroup(conv.updated_at)
+        items.push(buildConvItem(conv, group))
       })
 
       return items
@@ -494,34 +628,17 @@ export function ChatSidebar() {
         if (!cat) return group
 
         return (
-          <Dropdown
-            trigger={['contextMenu']}
-            menu={{
-              items: [
-                { key: 'edit', label: t('chat.editCategory'), icon: <Pencil size={14} /> },
-                { key: 'delete', label: t('chat.deleteCategory'), icon: <Trash2 size={14} />, danger: true },
-              ],
-              onClick: ({ key, domEvent }) => {
-                domEvent.stopPropagation()
-                menuActionRef.current = true
-                setTimeout(() => { menuActionRef.current = false }, 100)
-                if (key === 'edit') {
-                  setEditingCategory(cat)
-                  setCategoryModalOpen(true)
-                } else if (key === 'delete') {
-                  void handleDeleteCategory(catId)
-                }
-              },
+          <SortableCategoryLabel
+            cat={cat}
+            menuActionRef={menuActionRef}
+            editLabel={t('chat.editCategory')}
+            deleteLabel={t('chat.deleteCategory')}
+            onEdit={() => {
+              setEditingCategory(cat)
+              setCategoryModalOpen(true)
             }}
-          >
-            <div
-              className="flex items-center gap-1.5"
-              style={{ cursor: 'pointer', userSelect: 'none', flex: 1 }}
-            >
-              <CategoryIcon cat={cat} size={14} />
-              <span className="truncate">{cat.name}</span>
-            </div>
-          </Dropdown>
+            onDelete={() => void handleDeleteCategory(catId)}
+          />
         )
       }
       return groupLabels[group] ?? group
@@ -1051,18 +1168,40 @@ export function ChatSidebar() {
                 }
               `}</style>
               {conversationItems.length > 0 ? (
-                <Conversations
-                  items={conversationItems}
-                  activeKey={multiSelectMode ? undefined : (activeConversationId ?? undefined)}
-                  onActiveChange={handleConversationClick}
-                  groupable={{
-                    label: (group: string) => renderGroupLabel(group),
-                    collapsible: (group: string) => group.startsWith('cat:'),
-                    expandedKeys: expandedKeys,
-                    onExpand: handleGroupExpand,
-                  }}
-                  menu={menuConfig}
-                />
+                <DndContext
+                  sensors={dndSensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleCategoryDragStart}
+                  onDragOver={handleCategoryDragOver}
+                  onDragEnd={handleCategoryDragEnd}
+                  onDragCancel={handleCategoryDragCancel}
+                >
+                  <Conversations
+                    items={conversationItems}
+                    activeKey={multiSelectMode ? undefined : (activeConversationId ?? undefined)}
+                    onActiveChange={handleConversationClick}
+                    groupable={{
+                      label: (group: string) => renderGroupLabel(group),
+                      collapsible: (group: string) => group.startsWith('cat:'),
+                      expandedKeys: expandedKeys,
+                      onExpand: handleGroupExpand,
+                    }}
+                    menu={menuConfig}
+                  />
+                  <DragOverlay>
+                    {activeDragCatId ? (() => {
+                      const cat = categories.find((c) => c.id === activeDragCatId)
+                      if (!cat) return null
+                      return (
+                        <div className="flex items-center gap-1" style={{ opacity: 0.8, cursor: 'grabbing', fontSize: 13 }}>
+                          <GripVertical size={12} style={{ opacity: 0.4 }} />
+                          <CategoryIcon cat={cat} size={14} />
+                          <span>{cat.name}</span>
+                        </div>
+                      )
+                    })() : null}
+                  </DragOverlay>
+                </DndContext>
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <Empty description={t('chat.noConversations')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
