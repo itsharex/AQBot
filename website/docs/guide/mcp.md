@@ -169,22 +169,6 @@ Pass API keys or configuration to the server process via environment variables.
 
 ---
 
-## Permission Policies
-
-Each MCP server can be assigned a permission policy that controls how tool calls are authorized.
-
-| Policy | Behavior |
-|--------|----------|
-| **Ask Every Time** | A confirmation dialog appears before every tool call. Safest option. |
-| **Allow Safe Operations** | Read-only operations execute automatically; write or destructive operations require confirmation. |
-| **Allow All** | All tool calls execute without confirmation. Use only with servers you fully trust. |
-
-::: warning
-The **Allow All** policy lets the AI execute any tool — including file writes and shell commands — without asking. Use it only with trusted, well-scoped servers.
-:::
-
----
-
 ## Built-in Tools
 
 AQBot ships with built-in tools that are available without adding any external MCP server:
