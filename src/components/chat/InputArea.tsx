@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Button, Tooltip, App, theme, Dropdown, Tag, Popover, Checkbox } from 'antd';
+import { Button, Tooltip, App, theme, Dropdown, Tag, Popover, Checkbox, Badge } from 'antd';
 import type { MenuProps } from 'antd';
 import { Paperclip, Trash2, Mic, Eraser, Scissors, Globe, Brain, BrainCog, Plug, SlidersHorizontal, ArrowUp, Square, Check, Zap, ZapOff, Gauge, Shrink, Upload, LayoutGrid, X, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -951,12 +951,14 @@ export function InputArea() {
               onOpenChange={setMcpPopoverOpen}
             >
               <Tooltip title={t('chat.mcp.title', 'MCP 工具')} open={mcpPopoverOpen ? false : undefined}>
+                <Badge count={enabledMcpServerIds.filter((id) => mcpServers.some((s) => s.id === id && s.enabled)).length} size="small" offset={[-4, 4]} color={token.colorPrimary}>
                 <Button
                   type="text"
                   size="small"
                   icon={<Plug size={14} />}
                   style={enabledMcpServerIds.some((id) => mcpServers.some((s) => s.id === id && s.enabled)) ? { color: token.colorPrimary } : undefined}
                 />
+                </Badge>
               </Tooltip>
             </Popover>
             <Popover
@@ -968,12 +970,14 @@ export function InputArea() {
               onOpenChange={setKbPopoverOpen}
             >
               <Tooltip title={t('chat.knowledge.title', '知识库')} open={kbPopoverOpen ? false : undefined}>
+                <Badge count={enabledKnowledgeBaseIds.length} size="small" offset={[-4, 4]} color={token.colorPrimary}>
                 <Button
                   type="text"
                   size="small"
                   icon={<BookOpen size={14} />}
                   style={enabledKnowledgeBaseIds.length > 0 ? { color: token.colorPrimary } : undefined}
                 />
+                </Badge>
               </Tooltip>
             </Popover>
             <Popover
@@ -985,12 +989,14 @@ export function InputArea() {
               onOpenChange={setMemoryPopoverOpen}
             >
               <Tooltip title={t('chat.memory.title', '记忆')} open={memoryPopoverOpen ? false : undefined}>
+                <Badge count={enabledMemoryNamespaceIds.length} size="small" offset={[-4, 4]} color={token.colorPrimary}>
                 <Button
                   type="text"
                   size="small"
                   icon={<Brain size={14} />}
                   style={enabledMemoryNamespaceIds.length > 0 ? { color: token.colorPrimary } : undefined}
                 />
+                </Badge>
               </Tooltip>
             </Popover>
             <Tooltip title={t('chat.multiModel', '多模型同答')}>
