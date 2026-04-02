@@ -35,8 +35,8 @@
 ### Search & Knowledge
 
 - **Web Search** — Integrated with Tavily, Zhipu WebSearch, Bocha, and more, with citation source annotations
-- **Local Knowledge Base (RAG)** (Coming Soon) — Upload documents to build vector indices (LanceDB), with semantic retrieval during conversations
-- **Memory System** (Coming Soon) — Global and project-level memory, added manually or extracted automatically by AI
+- **Local Knowledge Base (RAG)** — Supports multiple knowledge bases; upload documents for automatic parsing, chunking, and indexing, with semantic retrieval of relevant passages during conversations
+- **Memory System** — Supports multi-namespace conversational memory, with manual entry or AI-powered auto-extraction (auto-extraction coming soon)
 - **Context Management** — Flexibly attach file attachments, search results, knowledge base passages, memory entries, and tool outputs
 
 ### Tools & Extensions
