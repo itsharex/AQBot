@@ -9,9 +9,6 @@
 use aqbot_core::token_counter;
 use aqbot_core::types::{ChatContent, ChatMessage};
 
-/// Default context window when model doesn't specify one.
-const DEFAULT_CONTEXT_WINDOW: usize = 4096;
-
 /// Fraction of context window that triggers auto-compression (70%).
 const THRESHOLD_RATIO: f64 = 0.70;
 
@@ -39,14 +36,18 @@ pub fn message_tokens(msg: &ChatMessage) -> usize {
 /// Check whether the current context exceeds the auto-compression threshold.
 ///
 /// Returns `true` if total tokens (system + history) > model_context_window * 0.70.
+///
+/// When `model_context_window` is `None` (model has no configured limit), always
+/// returns `false` — we never auto-compress without a known budget.
 pub fn should_auto_compress(
     system_messages: &[ChatMessage],
     history_messages: &[ChatMessage],
     model_context_window: Option<u32>,
 ) -> bool {
-    let context_window = model_context_window
-        .map(|v| v as usize)
-        .unwrap_or(DEFAULT_CONTEXT_WINDOW);
+    let context_window = match model_context_window {
+        Some(v) => v as usize,
+        None => return false,
+    };
     let threshold = (context_window as f64 * THRESHOLD_RATIO) as usize;
 
     let total: usize = system_messages
@@ -61,18 +62,14 @@ pub fn should_auto_compress(
 /// Build the final context for LLM from system messages + optional summary + history.
 ///
 /// If a summary exists, it is prepended as a system message.
-/// Sliding window is applied if messages still exceed the token budget.
+/// Sliding window is applied only when `model_context_window` is `Some`.
+/// When the model has no configured limit, all history messages are included.
 pub fn build_context(
     system_messages: &[ChatMessage],
     history_messages: &[ChatMessage],
     existing_summary: Option<&str>,
     model_context_window: Option<u32>,
 ) -> Vec<ChatMessage> {
-    let context_window = model_context_window
-        .map(|v| v as usize)
-        .unwrap_or(DEFAULT_CONTEXT_WINDOW);
-    let budget = (context_window as f64 * THRESHOLD_RATIO) as usize;
-
     let mut out = system_messages.to_vec();
 
     // Insert summary as a system message if present
@@ -88,17 +85,31 @@ pub fn build_context(
         });
     }
 
-    let system_tokens: usize = out.iter().map(|m| message_tokens(m)).sum();
-    let available = budget.saturating_sub(system_tokens);
+    match model_context_window {
+        Some(ctx_window) => {
+            let budget = (ctx_window as f64 * THRESHOLD_RATIO) as usize;
+            let system_tokens: usize = out.iter().map(|m| message_tokens(m)).sum();
+            let available = budget.saturating_sub(system_tokens);
+            let trimmed = sliding_window(history_messages, available);
+            out.extend(trimmed);
+        }
+        None => {
+            // No known context limit — include all history messages
+            out.extend(history_messages.iter().cloned());
+        }
+    }
 
-    // Sliding window on history to fit remaining budget
-    let trimmed = sliding_window(history_messages, available);
-    out.extend(trimmed);
     out
 }
 
 /// Sliding window: keep as many recent messages as fit within `budget` tokens.
+/// Always includes at least the last message to prevent the current user input
+/// from being silently dropped.
 fn sliding_window(history: &[ChatMessage], budget: usize) -> Vec<ChatMessage> {
+    if history.is_empty() {
+        return Vec::new();
+    }
+
     let mut total = 0usize;
     let mut start_idx = history.len();
 
@@ -109,6 +120,11 @@ fn sliding_window(history: &[ChatMessage], budget: usize) -> Vec<ChatMessage> {
         }
         total += tokens;
         start_idx = i;
+    }
+
+    // Always include at least the last message
+    if start_idx == history.len() {
+        start_idx = history.len() - 1;
     }
 
     history[start_idx..].to_vec()
