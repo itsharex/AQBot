@@ -329,6 +329,8 @@ async fn consume_stream(
     Option<TokenUsage>,
     Option<Vec<ToolCall>>,
     Option<String>,
+    Option<f64>,  // tokens_per_second
+    Option<i64>,  // first_token_latency_ms
 ) {
     use futures::StreamExt;
     let mut full_content = String::new();
@@ -336,6 +338,9 @@ async fn consume_stream(
     let mut final_usage: Option<TokenUsage> = None;
     let mut final_tool_calls: Option<Vec<ToolCall>> = None;
     let mut stream_error: Option<String> = None;
+
+    let stream_start = std::time::Instant::now();
+    let mut first_token_time: Option<std::time::Instant> = None;
 
     while let Some(result) = stream.next().await {
         // Check for cancellation
@@ -355,9 +360,15 @@ async fn consume_stream(
                     );
                 }
                 if let Some(ref c) = chunk.content {
+                    if first_token_time.is_none() && !c.is_empty() {
+                        first_token_time = Some(std::time::Instant::now());
+                    }
                     full_content.push_str(c);
                 }
                 if let Some(ref t) = chunk.thinking {
+                    if first_token_time.is_none() && !t.is_empty() {
+                        first_token_time = Some(std::time::Instant::now());
+                    }
                     full_thinking.push_str(t);
                 }
                 if chunk.usage.is_some() {
@@ -421,12 +432,29 @@ async fn consume_stream(
         }
     }
 
+    // Compute timing metrics
+    let first_token_latency_ms = first_token_time
+        .map(|t| (t - stream_start).as_millis() as i64);
+    let tokens_per_second = match (final_usage.as_ref(), first_token_time) {
+        (Some(usage), Some(ft)) if usage.completion_tokens > 0 => {
+            let gen_duration = stream_start.elapsed().as_secs_f64() - (ft - stream_start).as_secs_f64();
+            if gen_duration > 0.0 {
+                Some(usage.completion_tokens as f64 / gen_duration)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+
     (
         full_content,
         full_thinking,
         final_usage,
         final_tool_calls,
         stream_error,
+        tokens_per_second,
+        first_token_latency_ms,
     )
 }
 
@@ -1022,6 +1050,8 @@ fn spawn_stream_task(
         let mut final_tool_calls_json: Option<String> = None;
         let mut had_stream_error = false;
         let mut last_stream_error: Option<String> = None;
+        let mut final_tokens_per_second: Option<f64> = None;
+        let mut final_first_token_latency_ms: Option<i64> = None;
 
         // Early create: persist a placeholder message so it survives crash/refresh
         if let Err(e) = (aqbot_core::entity::messages::ActiveModel {
@@ -1044,6 +1074,8 @@ fn spawn_stream_task(
             tool_calls_json: Set(None),
             tool_call_id: Set(None),
             status: Set("partial".to_string()),
+            tokens_per_second: Set(None),
+            first_token_latency_ms: Set(None),
         })
         .insert(&db)
         .await
@@ -1087,7 +1119,7 @@ fn spawn_stream_task(
             };
 
             let mut stream = adapter.chat_stream(&ctx, request);
-            let (content, thinking, usage, tool_calls, stream_error) = consume_stream(
+            let (content, thinking, usage, tool_calls, stream_error, iter_tps, iter_ttft) = consume_stream(
                 &app,
                 &mut stream,
                 &conversation_id,
@@ -1100,6 +1132,13 @@ fn spawn_stream_task(
             total_thinking.push_str(&thinking);
             if usage.is_some() {
                 total_usage = usage;
+            }
+            // Keep first iteration's TTFT, last iteration's TPS
+            if final_first_token_latency_ms.is_none() {
+                final_first_token_latency_ms = iter_ttft;
+            }
+            if iter_tps.is_some() {
+                final_tokens_per_second = iter_tps;
             }
 
             // If stream errored, save what we have and break
@@ -1345,6 +1384,8 @@ fn spawn_stream_task(
                 }),
                 tool_calls_json: Set(final_tool_calls_json),
                 status: Set(final_status.to_string()),
+                tokens_per_second: Set(final_tokens_per_second),
+                first_token_latency_ms: Set(final_first_token_latency_ms),
                 ..Default::default()
             },
         )

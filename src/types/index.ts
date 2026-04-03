@@ -149,6 +149,8 @@ export interface Message {
   version_index: number;
   is_active: boolean;
   status: 'complete' | 'partial' | 'error';
+  tokens_per_second?: number | null;
+  first_token_latency_ms?: number | null;
 }
 
 export interface MessagePage {

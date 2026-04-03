@@ -25,6 +25,8 @@ pub struct Model {
     pub tool_call_id: Option<String>,
     #[sea_orm(default_value = "complete")]
     pub status: String,
+    pub tokens_per_second: Option<f64>,
+    pub first_token_latency_ms: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

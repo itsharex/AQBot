@@ -251,6 +251,8 @@ pub struct Message {
     pub tool_calls_json: Option<String>,
     pub tool_call_id: Option<String>,
     pub status: String,
+    pub tokens_per_second: Option<f64>,
+    pub first_token_latency_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

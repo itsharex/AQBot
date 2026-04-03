@@ -266,6 +266,8 @@ mod tests {
             tool_calls_json: Set(None),
             tool_call_id: Set(None),
             status: Set("complete".into()),
+            tokens_per_second: Set(None),
+            first_token_latency_ms: Set(None),
         };
         am.insert(db).await.unwrap();
     }

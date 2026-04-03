@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { CloseCircleFilled, SyncOutlined } from '@ant-design/icons';
 import { Typography, Button, Dropdown, Input, App, Avatar, Alert, Popconfirm, Popover, theme, Tag, Image, Tooltip, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
-import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap, Sparkles } from 'lucide-react';
+import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap, Sparkles, TextCursorInput } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { getConvIcon } from '@/lib/convIcon';
 import Bubble from '@ant-design/x/es/bubble';
@@ -25,7 +25,7 @@ import { MemoryRetrievalNode } from './MemoryRetrievalNode';
 import { KnowledgeRetrievalNode } from './KnowledgeRetrievalNode';
 import { McpContainerNode } from './McpContainerNode';
 import { getDistanceToHistoryTop, shouldShowScrollToBottom } from './chatScroll';
-import { formatTokenCount } from '../gateway/tokenFormat';
+import { formatTokenCount, formatSpeed, formatDuration } from '../gateway/tokenFormat';
 import { getStreamingLoadingState } from './chatStreaming';
 import { buildAssistantDisplayContent, shouldHideAssistantBubble } from './toolCallDisplay';
 import { ChatScrollIndicator } from './ChatScrollIndicator';
@@ -1210,8 +1210,8 @@ function AssistantFooter({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {!isStreaming && (msg.prompt_tokens != null || msg.completion_tokens != null) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: token.colorTextDescription, lineHeight: '16px', marginTop: -6, marginBottom: 4 }}>
+      {!isStreaming && (msg.prompt_tokens != null || msg.completion_tokens != null || msg.tokens_per_second != null || msg.first_token_latency_ms != null) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: token.colorTextDescription, lineHeight: '16px', marginTop: -6, marginBottom: 4, flexWrap: 'wrap' }}>
           {msg.prompt_tokens != null && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
               <ArrowUp size={10} />
@@ -1222,6 +1222,18 @@ function AssistantFooter({
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
               <ArrowDown size={10} />
               {formatTokenCount(msg.completion_tokens)} tokens
+            </span>
+          )}
+          {msg.tokens_per_second != null && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+              <Zap size={10} />
+              {formatSpeed(msg.tokens_per_second)}
+            </span>
+          )}
+          {msg.first_token_latency_ms != null && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+              <TextCursorInput size={10} />
+              {formatDuration(msg.first_token_latency_ms)}
             </span>
           )}
         </div>
@@ -1521,6 +1533,19 @@ export function ChatView() {
     bubbleListRef.current?.scrollTo({ top: 'bottom', behavior: 'smooth' });
     setShowScrollToBottom(false);
   }, []);
+
+  // Scroll to bottom when streaming starts (user sent a message while scrolled up)
+  const prevStreamingRef = useRef(false);
+  useEffect(() => {
+    if (streaming && !prevStreamingRef.current) {
+      // Delay to let the new message bubble render before scrolling
+      setTimeout(() => {
+        bubbleListRef.current?.scrollTo({ top: 'bottom', behavior: 'smooth' });
+        setShowScrollToBottom(false);
+      }, 50);
+    }
+    prevStreamingRef.current = streaming;
+  }, [streaming]);
 
   // ── Export menu ────────────────────────────────────────────────────
   const exportMenuItems = useMemo(

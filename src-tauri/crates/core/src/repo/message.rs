@@ -56,6 +56,8 @@ fn message_from_entity(m: messages::Model) -> Result<Message> {
         tool_calls_json: m.tool_calls_json,
         tool_call_id: m.tool_call_id,
         status: m.status,
+        tokens_per_second: m.tokens_per_second,
+        first_token_latency_ms: m.first_token_latency_ms,
     })
 }
 
@@ -321,6 +323,8 @@ pub async fn create_tool_result_message(
         tool_calls_json: Set(None),
         tool_call_id: Set(Some(tool_call_id.to_string())),
         status: Set("complete".to_string()),
+        tokens_per_second: Set(None),
+        first_token_latency_ms: Set(None),
     }
     .insert(db)
     .await?;
@@ -359,6 +363,8 @@ pub async fn create_assistant_tool_call_message(
         tool_calls_json: Set(tool_calls_json.map(|s| s.to_string())),
         tool_call_id: Set(None),
         status: Set("complete".to_string()),
+        tokens_per_second: Set(None),
+        first_token_latency_ms: Set(None),
     }
     .insert(db)
     .await?;
