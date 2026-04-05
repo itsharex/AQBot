@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Button, Tooltip, App, theme, Dropdown, Tag, Popover, Checkbox, Badge } from 'antd';
 import type { MenuProps } from 'antd';
-import { Paperclip, Trash2, Mic, Eraser, Scissors, Globe, Brain, BrainCog, Plug, SlidersHorizontal, ArrowUp, Square, Check, Zap, ZapOff, Gauge, Shrink, Upload, GitCompareArrows, X, BookOpen, GripHorizontal } from 'lucide-react';
+import { Paperclip, Trash2, Mic, Eraser, Scissors, Globe, Brain, Atom, Plug, SlidersHorizontal, ArrowUp, Square, Check, Zap, ZapOff, Shrink, Upload, GitCompareArrows, X, BookOpen, GripHorizontal, CircleOff, SignalLow, SignalMedium, SignalHigh, Signal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConversationStore, useProviderStore, useSettingsStore, useSearchStore, useMcpStore, useMemoryStore, useKnowledgeStore } from '@/stores';
 import { useUIStore } from '@/stores/uiStore';
@@ -317,11 +317,32 @@ export function InputArea() {
     [thinkingBudget, thinkingOptions],
   );
 
+  const thinkingIcon = useMemo(() => {
+    switch (selectedThinkingOption.key) {
+      case 'none': return <CircleOff size={14} />;
+      case 'low': return <SignalLow size={14} />;
+      case 'medium': return <SignalMedium size={14} />;
+      case 'high': return <SignalHigh size={14} />;
+      case 'xhigh': return <Signal size={14} />;
+      default: return <Atom size={14} />;
+    }
+  }, [selectedThinkingOption.key]);
+
   const thinkingMenuItems = useMemo<MenuProps['items']>(
     () => thinkingOptions.map((opt) => ({
       key: opt.key,
       label: opt.label,
-      icon: opt.key === 'none' ? <BrainCog size={14} /> : opt.key === 'default' ? <Brain size={14} /> : <Gauge size={14} />,
+      icon: (() => {
+        switch (opt.key) {
+          case 'none': return <CircleOff size={14} />;
+          case 'default': return <Atom size={14} />;
+          case 'low': return <SignalLow size={14} />;
+          case 'medium': return <SignalMedium size={14} />;
+          case 'high': return <SignalHigh size={14} />;
+          case 'xhigh': return <Signal size={14} />;
+          default: return <Atom size={14} />;
+        }
+      })(),
     })),
     [thinkingOptions],
   );
@@ -1020,7 +1041,7 @@ export function InputArea() {
                   <Button
                     type="text"
                     size="small"
-                    icon={<Brain size={14} />}
+                    icon={thinkingIcon}
                     style={
                       thinkingBudget === 0
                         ? { color: token.colorError }
