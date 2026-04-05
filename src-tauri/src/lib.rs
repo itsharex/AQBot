@@ -53,6 +53,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
 
     #[cfg(debug_assertions)]
@@ -71,6 +72,7 @@ pub fn run() {
             commands::providers::add_provider_key,
             commands::providers::delete_provider_key,
             commands::providers::toggle_provider_key,
+            commands::providers::get_decrypted_provider_key,
             commands::providers::validate_provider_key,
             commands::providers::save_models,
             commands::providers::toggle_model,

@@ -23,6 +23,8 @@
     "fs:allow-write-file",
     "fs:allow-read-file",
     "mcp-bridge:default",
-    "updater:default"
+    "updater:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text"
   ]
 }

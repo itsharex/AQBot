@@ -86,6 +86,18 @@ pub async fn toggle_provider_key(
 }
 
 #[tauri::command]
+pub async fn get_decrypted_provider_key(
+    state: State<'_, AppState>,
+    key_id: String,
+) -> Result<String, String> {
+    let key_row = aqbot_core::repo::provider::get_provider_key(&state.sea_db, &key_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    aqbot_core::crypto::decrypt_key(&key_row.key_encrypted, &state.master_key)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn validate_provider_key(
     state: State<'_, AppState>,
     key_id: String,

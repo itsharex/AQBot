@@ -23,11 +23,13 @@ import {
   App,
   theme,
 } from 'antd';
-import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown, Expand, Shrink } from 'lucide-react';
+import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown, Expand, Shrink, SquarePen } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
+import { invoke } from '@tauri-apps/api/core';
+import { writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
 import { useProviderStore, useUIStore } from '@/stores';
 import { SmartProviderIcon } from '@/lib/providerIcons';
 import { getEditableCapabilities, getVisibleModelCapabilities, sanitizeModelCapabilities } from '@/lib/modelCapabilities';
@@ -203,6 +205,9 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerCollapsed, setPickerCollapsed] = useState<Set<string>>(new Set());
+  const [providerEditModalOpen, setProviderEditModalOpen] = useState(false);
+  const [editProviderName, setEditProviderName] = useState('');
+  const [editProviderType, setEditProviderType] = useState<ProviderType>('openai');
 
   const pickerGroups = useMemo(() => {
     const filtered = pickerModels.filter((m) =>
@@ -663,19 +668,15 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
               <Title level={4} className="!mb-0">
                 {provider.name}
               </Title>
-              <Select
+              <Button
+                type="text"
                 size="small"
-                value={provider.provider_type}
-                onChange={(val) => updateProvider(providerId, { provider_type: val as ProviderType })}
-                style={{ minWidth: 140 }}
-                options={[
-                  { label: 'OpenAI', value: 'openai' },
-                  { label: 'OpenAI Responses', value: 'openai_responses' },
-                  { label: 'Anthropic', value: 'anthropic' },
-                  { label: 'Gemini', value: 'gemini' },
-                  { label: t('settings.custom'), value: 'custom' },
-                ]}
-                popupMatchSelectWidth={false}
+                icon={<SquarePen size={14} />}
+                onClick={() => {
+                  setEditProviderName(provider.name);
+                  setEditProviderType(provider.provider_type);
+                  setProviderEditModalOpen(true);
+                }}
               />
             </div>
           </div>
@@ -738,6 +739,22 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                   <Text code>{key.key_prefix}••••••••</Text>
                 </Space>
                 <Space size="small">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<Copy size={14} />}
+                    onClick={async () => {
+                      try {
+                        const raw = await invoke<string>('get_decrypted_provider_key', { keyId: key.id });
+                        await clipboardWriteText(raw);
+                        message.success(t('common.copySuccess'));
+                      } catch (e) {
+                        console.error('copy key failed:', e);
+                        message.error(t('error.unknown'));
+                      }
+                    }}
+                    title={t('common.copy')}
+                  />
                   <Button
                     type="text"
                     size="small"
@@ -1682,6 +1699,53 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
             </>
           );
         })()}
+      </Modal>
+
+      {/* Provider Edit Modal */}
+      <Modal
+        title={t('settings.editProvider')}
+        open={providerEditModalOpen}
+        onCancel={() => setProviderEditModalOpen(false)}
+        onOk={() => {
+          const trimmed = editProviderName.trim();
+          if (!trimmed) return;
+          const updates: Record<string, unknown> = {};
+          if (trimmed !== provider.name) updates.name = trimmed;
+          if (editProviderType !== provider.provider_type) updates.provider_type = editProviderType;
+          if (Object.keys(updates).length > 0) {
+            updateProvider(providerId, updates);
+          }
+          setProviderEditModalOpen(false);
+        }}
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
+        destroyOnClose
+        width={420}
+      >
+        <Form layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item label={t('settings.providerName')}>
+            <Input
+              value={editProviderName}
+              onChange={(e) => setEditProviderName(e.target.value)}
+              autoFocus
+            />
+          </Form.Item>
+          <Form.Item label={t('settings.endpointFormat')} style={{ marginBottom: 0 }}>
+            <Select
+              value={editProviderType}
+              onChange={(val) => setEditProviderType(val as ProviderType)}
+              options={[
+                { label: 'OpenAI', value: 'openai' },
+                { label: 'OpenAI Responses', value: 'openai_responses' },
+                { label: 'Anthropic', value: 'anthropic' },
+                { label: 'Gemini', value: 'gemini' },
+                { label: t('settings.custom'), value: 'custom' },
+              ]}
+              popupMatchSelectWidth={false}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
