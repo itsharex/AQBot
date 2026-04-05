@@ -48,6 +48,10 @@ function AppInner() {
     root.style.setProperty('--color-text', token.colorText);
     root.style.setProperty('--color-text-secondary', token.colorTextSecondary);
     root.style.setProperty('--color-primary', token.colorPrimary);
+    // Markdown renderer (markstream-react) CSS variables
+    root.style.setProperty('--table-border', token.colorBorderSecondary);
+    root.style.setProperty('--hr-border-color', token.colorBorderSecondary);
+    root.style.setProperty('--blockquote-border-color', token.colorBorderSecondary);
   }, [token]);
 
   // Global stream event listeners — persist across page navigation

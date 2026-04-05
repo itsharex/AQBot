@@ -220,3 +220,33 @@ svg.lucide {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.7; }
 }
+
+/* ── markstream-react dark mode border overrides ──────────────────────── */
+html[data-theme="dark"] .markstream-react .thematic-break {
+  border-top-color: var(--hr-border-color, var(--border-color));
+}
+
+html[data-theme="dark"] .markstream-react .footnote-node {
+  border-left-color: var(--border-color);
+  color: var(--color-text-secondary);
+}
+
+html[data-theme="dark"] .markstream-react .admonition-node {
+  border-left-color: var(--border-color);
+  background: color-mix(in srgb, var(--color-bg-elevated) 90%, transparent);
+}
+
+html[data-theme="dark"] .markstream-react .border-\[\#eaecef\] {
+  border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .markstream-react .border-gray-200 {
+  border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .markstream-react .table-node th,
+html[data-theme="dark"] .markstream-react .table-node td,
+html[data-theme="dark"] .markstream-react .table-node tr,
+html[data-theme="dark"] .markstream-react .table-node thead {
+  border-color: var(--table-border, var(--border-color));
+}
