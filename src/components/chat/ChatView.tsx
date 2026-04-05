@@ -1450,7 +1450,7 @@ export function ChatView() {
   const compressing = useConversationStore((s) => s.compressing);
   const streamingMessageId = useConversationStore((s) => s.streamingMessageId);
   const multiModelParentId = useConversationStore((s) => s.multiModelParentId);
-  const thinkingActiveMessageId = useConversationStore((s) => s.thinkingActiveMessageId);
+  const thinkingActiveMessageIds = useConversationStore((s) => s.thinkingActiveMessageIds);
   const storeError = useConversationStore((s) => s.error);
   const updateConversation = useConversationStore((s) => s.updateConversation);
   const titleGeneratingConversationId = useConversationStore((s) => s.titleGeneratingConversationId);
@@ -1833,7 +1833,7 @@ export function ChatView() {
         : msg.content;
       if (shouldHideAssistantBubble(msg, aiContent)) continue;
       // Close unclosed think block during streaming
-      if (msg.role === 'assistant' && thinkingActiveMessageId === msg.id && aiContent.includes('<think')) {
+      if (msg.role === 'assistant' && thinkingActiveMessageIds.has(msg.id) && aiContent.includes('<think')) {
         const lastOpen = aiContent.lastIndexOf('<think');
         const lastClose = aiContent.lastIndexOf('</think>');
         if (lastClose < lastOpen) {
@@ -1868,7 +1868,7 @@ export function ChatView() {
 
     bubbleItemCacheRef.current = nextCache;
     return nextItems;
-  }, [activeMessages, thinkingActiveMessageId, userSearchContentById]);
+  }, [activeMessages, thinkingActiveMessageIds, userSearchContentById]);
 
   // Append compressing placeholder when compression is in progress
   const finalBubbleItems = useMemo(() => {

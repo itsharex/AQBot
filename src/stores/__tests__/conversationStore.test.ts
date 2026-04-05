@@ -96,7 +96,7 @@ describe('conversationStore pagination', () => {
       streaming: false,
       streamingMessageId: null,
       streamingConversationId: null,
-      thinkingActiveMessageId: null,
+      thinkingActiveMessageIds: new Set<string>(),
       error: null,
       searchEnabled: false,
       searchProviderId: null,

@@ -258,7 +258,7 @@ interface ConversationState {
   compressing: boolean;
   streamingMessageId: string | null;
   streamingConversationId: string | null;
-  thinkingActiveMessageId: string | null;
+  thinkingActiveMessageIds: Set<string>;
   error: string | null;
   /** Whether web search is enabled for messages in the active conversation */
   searchEnabled: boolean;
@@ -493,7 +493,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   compressing: false,
   streamingMessageId: null,
   streamingConversationId: null,
-  thinkingActiveMessageId: null,
+  thinkingActiveMessageIds: new Set<string>(),
   error: null,
   titleGeneratingConversationId: null,
   pendingCompanionModels: [],
@@ -1121,7 +1121,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       streaming: true,
       streamingConversationId: conversationId,
       streamingMessageId: tempAssistantId,
-      thinkingActiveMessageId: null,
+      thinkingActiveMessageIds: new Set<string>(),
     }));
     _pendingUiChunk = null;
     if (_streamUiFlushTimer !== null) {
@@ -1185,7 +1185,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       // In browser mode, simulate brief loading then fetch the mock AI response
       if (!isTauri()) {
         await new Promise((r) => setTimeout(r, 600));
-        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageId: null });
+        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageIds: new Set<string>() });
         get().fetchMessages(conversationId);
       }
     } catch (e) {
@@ -1195,7 +1195,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         streaming: false,
         streamingMessageId: null,
         streamingConversationId: null,
-        thinkingActiveMessageId: null,
+        thinkingActiveMessageIds: new Set<string>(),
         messages: s.streamingMessageId
           ? s.messages.map(m =>
               m.id === s.streamingMessageId
@@ -1293,7 +1293,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         streaming: true,
         streamingMessageId: tempAssistantId,
         streamingConversationId: conversationId,
-        thinkingActiveMessageId: null,
+        thinkingActiveMessageIds: new Set<string>(),
       };
     });
     _pendingUiChunk = null;
@@ -1319,7 +1319,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       // In browser mode, simulate brief loading then fetch the mock AI response
       if (!isTauri()) {
         await new Promise((r) => setTimeout(r, 600));
-        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageId: null });
+        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageIds: new Set<string>() });
         get().fetchMessages(conversationId);
       }
     } catch (e) {
@@ -1329,7 +1329,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         streaming: false,
         streamingMessageId: null,
         streamingConversationId: null,
-        thinkingActiveMessageId: null,
+        thinkingActiveMessageIds: new Set<string>(),
         messages: s.streamingMessageId
           ? s.messages.map(m =>
               m.id === s.streamingMessageId
@@ -1399,7 +1399,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         streaming: true,
         streamingMessageId: tempAssistantId,
         streamingConversationId: conversationId,
-        thinkingActiveMessageId: null,
+        thinkingActiveMessageIds: new Set<string>(),
       };
     });
     _pendingUiChunk = null;
@@ -1426,7 +1426,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
       if (!isTauri()) {
         await new Promise((r) => setTimeout(r, 600));
-        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageId: null });
+        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageIds: new Set<string>() });
         get().fetchMessages(conversationId);
       }
     } catch (e) {
@@ -1436,7 +1436,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         streaming: false,
         streamingMessageId: null,
         streamingConversationId: null,
-        thinkingActiveMessageId: null,
+        thinkingActiveMessageIds: new Set<string>(),
         messages: s.streamingMessageId
           ? s.messages.map(m =>
               m.id === s.streamingMessageId
@@ -1546,7 +1546,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           if (_multiModelTotalRemaining <= 0 && _multiModelDoneResolve) {
             const r = _multiModelDoneResolve;
             _multiModelDoneResolve = null;
-            set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageId: null });
+            set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageIds: new Set<string>() });
             r();
           }
         })
@@ -1839,8 +1839,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           }
           flushPendingStreamChunk(set, get);
           // Clear thinking state — this iteration is done
-          if (get().thinkingActiveMessageId === message_id) {
-            set({ thinkingActiveMessageId: null });
+          if (get().thinkingActiveMessageIds.has(message_id)) {
+            set((s) => {
+              const next = new Set(s.thinkingActiveMessageIds);
+              next.delete(message_id);
+              return { thinkingActiveMessageIds: next };
+            });
           }
           return;
         }
@@ -1858,6 +1862,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
               // This is the first model finishing — save its message_id for later version switching
               _multiModelFirstMessageId = message_id;
               updated.streamingMessageId = null;
+            }
+            // Clear thinking state for this completed model
+            if (s.thinkingActiveMessageIds.has(message_id)) {
+              const nextThinking = new Set(s.thinkingActiveMessageIds);
+              nextThinking.delete(message_id);
+              updated.thinkingActiveMessageIds = nextThinking;
             }
             updated.conversations = s.conversations.map((c) =>
               c.id === conversation_id ? { ...c, message_count: c.message_count + 1 } : c,
@@ -1877,7 +1887,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
               streaming: false,
               streamingMessageId: null,
               streamingConversationId: null,
-              thinkingActiveMessageId: null,
+              thinkingActiveMessageIds: new Set<string>(),
             });
             if (_multiModelDoneResolve) {
               const resolve = _multiModelDoneResolve;
@@ -1906,7 +1916,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           streaming: false,
           streamingMessageId: null,
           streamingConversationId: null,
-          thinkingActiveMessageId: null,
+          thinkingActiveMessageIds: new Set<string>(),
           conversations: s.conversations.map((c) =>
             c.id === conversation_id
               ? { ...c, message_count: c.message_count + 1 }
@@ -1935,11 +1945,15 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         return;
       }
 
-      if (chunk.thinking !== undefined && chunk.thinking !== null && get().thinkingActiveMessageId !== message_id) {
-        set({ thinkingActiveMessageId: message_id });
+      if (chunk.thinking !== undefined && chunk.thinking !== null && !get().thinkingActiveMessageIds.has(message_id)) {
+        set((s) => ({ thinkingActiveMessageIds: new Set([...s.thinkingActiveMessageIds, message_id]) }));
       }
-      if (chunk.content && get().thinkingActiveMessageId === message_id && (chunk.thinking === undefined || chunk.thinking === null)) {
-        set({ thinkingActiveMessageId: null });
+      if (chunk.content && get().thinkingActiveMessageIds.has(message_id) && (chunk.thinking === undefined || chunk.thinking === null)) {
+        set((s) => {
+          const next = new Set(s.thinkingActiveMessageIds);
+          next.delete(message_id);
+          return { thinkingActiveMessageIds: next };
+        });
       }
 
       appendStreamChunk(set, get, message_id, chunk.content, conversation_id);
@@ -1965,7 +1979,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           ),
         }));
         if (_multiModelTotalRemaining <= 0) {
-          set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageId: null });
+          set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageIds: new Set<string>() });
           if (_multiModelDoneResolve) { const r = _multiModelDoneResolve; _multiModelDoneResolve = null; r(); }
         }
         return;
@@ -1973,7 +1987,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
       // Only show error if still on the same conversation
       if (get().activeConversationId !== conversation_id) {
-        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageId: null });
+        set({ streaming: false, streamingMessageId: null, streamingConversationId: null, thinkingActiveMessageIds: new Set<string>() });
         return;
       }
 
@@ -1982,7 +1996,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         streaming: false,
         streamingMessageId: null,
         streamingConversationId: null,
-        thinkingActiveMessageId: null,
+        thinkingActiveMessageIds: new Set<string>(),
         messages: s.messages.map(m =>
           m.id === message_id || m.id === s.streamingMessageId
             ? { ...m, content: errMsg, status: 'error' as const }
@@ -2118,7 +2132,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       streaming: false,
       streamingMessageId: null,
       streamingConversationId: null,
-      thinkingActiveMessageId: null,
+      thinkingActiveMessageIds: new Set<string>(),
       messages: streamMsgId
         ? s.messages.map(m => m.id === streamMsgId ? { ...m, status: 'partial' as const } : m)
         : s.messages,
