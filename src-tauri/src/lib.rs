@@ -236,6 +236,8 @@ pub fn run() {
             commands::desktop::test_proxy,
             commands::desktop::open_devtools,
             commands::desktop::list_system_fonts,
+            commands::desktop::minimize_window,
+            commands::desktop::toggle_maximize_window,
             // files
             commands::files::upload_file,
             commands::files::download_file,
@@ -399,9 +401,13 @@ pub fn run() {
             if let Some(main_window) = app.get_webview_window("main") {
                 // On Windows, hide native decorations so the custom TitleBar is
                 // the only title bar.  macOS keeps its Overlay style (traffic lights).
+                // After removing decorations, re-enable minimize/maximize capabilities
+                // since set_decorations(false) strips the WS_MINIMIZEBOX/WS_MAXIMIZEBOX styles.
                 #[cfg(target_os = "windows")]
                 {
                     let _ = main_window.set_decorations(false);
+                    let _ = main_window.set_minimizable(true);
+                    let _ = main_window.set_maximizable(true);
                 }
 
                 if let Some(saved_state) = window_state::load_window_state(&app_dir) {

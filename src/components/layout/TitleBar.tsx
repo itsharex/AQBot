@@ -146,13 +146,11 @@ export function TitleBar() {
   }, []);
 
   const handleWindowMinimize = useCallback(async () => {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    await getCurrentWindow().minimize();
+    await invoke('minimize_window');
   }, []);
 
   const handleWindowMaximize = useCallback(async () => {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    await getCurrentWindow().toggleMaximize();
+    await invoke('toggle_maximize_window');
   }, []);
 
   const handleWindowClose = useCallback(async () => {
