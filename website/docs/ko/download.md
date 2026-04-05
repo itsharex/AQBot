@@ -23,7 +23,8 @@
 
 ### Windows
 
-- `AQBot_x.x.x_x64-setup.exe` 다운로드
+- **설치 버전**: `AQBot_x.x.x_x64-setup.exe` 다운로드
+- **포터블 버전 (Portable)**: `AQBot_x.x.x_windows-x64-portable.zip` 다운로드 — 압축 해제 후 바로 사용, 설치 불필요
 
 ### Linux
 
@@ -40,9 +41,14 @@
 
 ### Windows
 
+**설치 버전：**
 1. 다운로드한 설치 프로그램 실행
 2. 마법사를 따라 설치 완료
 3. 시작 메뉴 또는 바탕 화면 바로 가기에서 시작
+
+**포터블 버전 (Portable)：**
+1. `.zip` 파일을 원하는 폴더에 압축 해제
+2. `AQBot.exe`를 더블 클릭하여 실행
 
 ### Linux
 

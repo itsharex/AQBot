@@ -23,7 +23,8 @@
 
 ### Windows
 
-- 下載 `AQBot_x.x.x_x64-setup.exe`
+- **安裝版**: 下載 `AQBot_x.x.x_x64-setup.exe`
+- **綠色免安裝版 (Portable)**: 下載 `AQBot_x.x.x_windows-x64-portable.zip` — 解壓即用，無需安裝
 
 ### Linux
 
@@ -40,9 +41,14 @@
 
 ### Windows
 
+**安裝版：**
 1. 執行下載的安裝程式
 2. 依精靈完成安裝
 3. 從開始功能表或桌面捷徑啟動
+
+**綠色免安裝版 (Portable)：**
+1. 解壓 `.zip` 檔案到任意目錄
+2. 雙擊 `AQBot.exe` 即可執行
 
 ### Linux
 

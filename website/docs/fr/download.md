@@ -23,7 +23,8 @@ Visitez la page GitHub Releases pour la dernière version :
 
 ### Windows
 
-- Téléchargez `AQBot_x.x.x_x64-setup.exe`
+- **Version installable** : Téléchargez `AQBot_x.x.x_x64-setup.exe`
+- **Version portable (Portable)** : Téléchargez `AQBot_x.x.x_windows-x64-portable.zip` — Extraire et utiliser, aucune installation nécessaire
 
 ### Linux
 
@@ -40,9 +41,14 @@ Visitez la page GitHub Releases pour la dernière version :
 
 ### Windows
 
+**Version installable :**
 1. Exécutez l'installateur téléchargé
 2. Suivez l'assistant pour terminer l'installation
 3. Lancez depuis le menu Démarrer ou le raccourci bureau
+
+**Version portable (Portable) :**
+1. Extrayez le fichier `.zip` dans n'importe quel dossier
+2. Double-cliquez sur `AQBot.exe` pour lancer
 
 ### Linux
 

@@ -23,7 +23,8 @@ Visit the GitHub Releases page for the latest version:
 
 ### Windows
 
-- Download `AQBot_x.x.x_x64-setup.exe`
+- **安装版**: Download `AQBot_x.x.x_x64-setup.exe`
+- **绿色免安装版 (Portable)**: Download `AQBot_x.x.x_windows-x64-portable.zip` — 解压即用，无需安装
 
 ### Linux
 
@@ -40,9 +41,14 @@ Visit the GitHub Releases page for the latest version:
 
 ### Windows
 
+**安装版：**
 1. Run the downloaded installer
 2. Follow the wizard to complete installation
 3. Launch from Start Menu or desktop shortcut
+
+**绿色免安装版 (Portable)：**
+1. 解压 `.zip` 文件到任意目录
+2. 双击 `AQBot.exe` 即可运行
 
 ### Linux
 
