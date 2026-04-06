@@ -14,6 +14,7 @@ fn category_from_entity(m: conversation_categories::Model) -> ConversationCatego
         name: m.name,
         icon_type: m.icon_type,
         icon_value: m.icon_value,
+        system_prompt: m.system_prompt,
         sort_order: m.sort_order,
         is_collapsed: m.is_collapsed != 0,
         created_at: m.created_at,
@@ -52,6 +53,7 @@ pub async fn create_conversation_category(
         name: Set(input.name),
         icon_type: Set(input.icon_type),
         icon_value: Set(input.icon_value),
+        system_prompt: Set(input.system_prompt),
         sort_order: Set(sort_order),
         is_collapsed: Set(1),
         created_at: Set(now),
@@ -80,6 +82,9 @@ pub async fn update_conversation_category(
     }
     if let Some(icon_value) = input.icon_value {
         am.icon_value = Set(Some(icon_value));
+    }
+    if input.system_prompt.is_some() {
+        am.system_prompt = Set(input.system_prompt);
     }
     am.updated_at = Set(now_ts());
     am.update(db).await?;

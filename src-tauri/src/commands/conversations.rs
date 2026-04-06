@@ -17,6 +17,40 @@ fn provider_type_to_registry_key(pt: &ProviderType) -> &'static str {
     }
 }
 
+/// Resolve effective system prompt with priority: Conversation → Category → Global Default
+async fn resolve_system_prompt(
+    db: &DatabaseConnection,
+    conversation: &Conversation,
+) -> Option<String> {
+    // 1. Conversation-level system prompt (highest priority)
+    if let Some(s) = &conversation.system_prompt {
+        if !s.is_empty() {
+            return Some(s.clone());
+        }
+    }
+
+    // 2. Category-level system prompt (middle priority)
+    if let Some(ref cat_id) = conversation.category_id {
+        if let Ok(categories) =
+            aqbot_core::repo::conversation_category::list_conversation_categories(db).await
+        {
+            if let Some(cat) = categories.iter().find(|c| &c.id == cat_id) {
+                if let Some(ref s) = cat.system_prompt {
+                    if !s.is_empty() {
+                        return Some(s.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Global default system prompt (lowest priority)
+    let settings = aqbot_core::repo::settings::get_settings(db)
+        .await
+        .unwrap_or_default();
+    settings.default_system_prompt.filter(|s| !s.is_empty())
+}
+
 async fn persist_attachments(
     state: &AppState,
     conversation_id: &str,
@@ -1705,16 +1739,8 @@ pub async fn send_message(
 
     let mut chat_messages: Vec<ChatMessage> = Vec::new();
 
-    // Resolve effective system prompt: conversation-level overrides global default
-    let effective_system_prompt = match &conversation.system_prompt {
-        Some(s) if !s.is_empty() => Some(s.clone()),
-        _ => {
-            let settings = aqbot_core::repo::settings::get_settings(&state.sea_db)
-                .await
-                .unwrap_or_default();
-            settings.default_system_prompt.filter(|s| !s.is_empty())
-        }
-    };
+    // Resolve effective system prompt: conversation → category → global default
+    let effective_system_prompt = resolve_system_prompt(&state.sea_db, &conversation).await;
 
     // Prepend system prompt if present
     if let Some(ref sys) = effective_system_prompt {
@@ -2093,16 +2119,8 @@ pub async fn regenerate_message(
 
     let mut chat_messages: Vec<ChatMessage> = Vec::new();
 
-    // Resolve effective system prompt: conversation-level overrides global default
-    let effective_system_prompt = match &conversation.system_prompt {
-        Some(s) if !s.is_empty() => Some(s.clone()),
-        _ => {
-            let settings = aqbot_core::repo::settings::get_settings(&state.sea_db)
-                .await
-                .unwrap_or_default();
-            settings.default_system_prompt.filter(|s| !s.is_empty())
-        }
-    };
+    // Resolve effective system prompt: conversation → category → global default
+    let effective_system_prompt = resolve_system_prompt(&state.sea_db, &conversation).await;
 
     if let Some(ref sys) = effective_system_prompt {
         chat_messages.push(ChatMessage {
@@ -2385,16 +2403,8 @@ pub async fn regenerate_with_model(
     let file_store = aqbot_core::file_store::FileStore::new();
     let mut chat_messages: Vec<ChatMessage> = Vec::new();
 
-    // Resolve effective system prompt: conversation-level overrides global default
-    let effective_system_prompt = match &conversation.system_prompt {
-        Some(s) if !s.is_empty() => Some(s.clone()),
-        _ => {
-            let settings = aqbot_core::repo::settings::get_settings(&state.sea_db)
-                .await
-                .unwrap_or_default();
-            settings.default_system_prompt.filter(|s| !s.is_empty())
-        }
-    };
+    // Resolve effective system prompt: conversation → category → global default
+    let effective_system_prompt = resolve_system_prompt(&state.sea_db, &conversation).await;
 
     if let Some(ref sys) = effective_system_prompt {
         tracing::info!(

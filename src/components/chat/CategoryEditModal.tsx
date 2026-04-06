@@ -4,13 +4,16 @@ import { FolderOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { IconEditor } from '@/components/shared/IconEditor';
 
+const { TextArea } = Input;
+
 interface CategoryEditModalProps {
   open: boolean;
   onClose: () => void;
-  onOk: (data: { name: string; icon_type: string | null; icon_value: string | null }) => void;
+  onOk: (data: { name: string; icon_type: string | null; icon_value: string | null; system_prompt: string | null }) => void;
   initialName?: string;
   initialIconType?: string | null;
   initialIconValue?: string | null;
+  initialSystemPrompt?: string | null;
   title?: string;
 }
 
@@ -21,6 +24,7 @@ export function CategoryEditModal({
   initialName = '',
   initialIconType = null,
   initialIconValue = null,
+  initialSystemPrompt = null,
   title,
 }: CategoryEditModalProps) {
   const { t } = useTranslation();
@@ -28,18 +32,25 @@ export function CategoryEditModal({
   const [name, setName] = useState(initialName);
   const [iconType, setIconType] = useState<string | null>(initialIconType);
   const [iconValue, setIconValue] = useState<string | null>(initialIconValue);
+  const [systemPrompt, setSystemPrompt] = useState(initialSystemPrompt ?? '');
 
   useEffect(() => {
     if (open) {
       setName(initialName);
       setIconType(initialIconType ?? null);
       setIconValue(initialIconValue ?? null);
+      setSystemPrompt(initialSystemPrompt ?? '');
     }
-  }, [open, initialName, initialIconType, initialIconValue]);
+  }, [open, initialName, initialIconType, initialIconValue, initialSystemPrompt]);
 
   const handleOk = () => {
     if (!name.trim()) return;
-    onOk({ name: name.trim(), icon_type: iconType, icon_value: iconValue });
+    onOk({
+      name: name.trim(),
+      icon_type: iconType,
+      icon_value: iconValue,
+      system_prompt: systemPrompt.trim() || null,
+    });
     onClose();
   };
 
@@ -51,7 +62,7 @@ export function CategoryEditModal({
       onOk={handleOk}
       okButtonProps={{ disabled: !name.trim() }}
       destroyOnClose
-      width={380}
+      width={420}
       mask={{ enabled: true, blur: true }}
     >
       <div className="flex flex-col items-center gap-3 py-3">
@@ -75,7 +86,15 @@ export function CategoryEditModal({
           onChange={(e) => setName(e.target.value)}
           onPressEnter={handleOk}
           autoFocus
-          style={{ maxWidth: 280 }}
+          style={{ maxWidth: 340 }}
+        />
+
+        <TextArea
+          placeholder={t('chat.categorySystemPromptPlaceholder', 'System Prompt（分类下的对话将继承此提示词）')}
+          value={systemPrompt}
+          onChange={(e) => setSystemPrompt(e.target.value)}
+          autoSize={{ minRows: 5, maxRows: 10 }}
+          style={{ maxWidth: 340 }}
         />
       </div>
     </Modal>

@@ -90,6 +90,7 @@ export interface ConversationCategory {
   name: string;
   icon_type: string | null;
   icon_value: string | null;
+  system_prompt: string | null;
   sort_order: number;
   is_collapsed: boolean;
   created_at: number;

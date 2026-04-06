@@ -9,6 +9,7 @@ pub struct Model {
     pub name: String,
     pub icon_type: Option<String>,
     pub icon_value: Option<String>,
+    pub system_prompt: Option<String>,
     pub sort_order: i32,
     pub is_collapsed: i32,
     pub created_at: i64,

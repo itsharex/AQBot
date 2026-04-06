@@ -10,6 +10,7 @@ interface CategoryState {
     name: string;
     icon_type?: string | null;
     icon_value?: string | null;
+    system_prompt?: string | null;
   }) => Promise<ConversationCategory>;
   updateCategory: (
     id: string,
@@ -17,6 +18,7 @@ interface CategoryState {
       name?: string;
       icon_type?: string | null;
       icon_value?: string | null;
+      system_prompt?: string | null;
     },
   ) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;

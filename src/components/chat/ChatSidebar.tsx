@@ -743,23 +743,25 @@ export function ChatSidebar() {
   )
 
   const handleCreateCategory = useCallback(
-    async (data: { name: string; icon_type: string | null; icon_value: string | null }) => {
+    async (data: { name: string; icon_type: string | null; icon_value: string | null; system_prompt: string | null }) => {
       await createCategory({
         name: data.name,
         icon_type: data.icon_type,
         icon_value: data.icon_value,
+        system_prompt: data.system_prompt,
       })
     },
     [createCategory],
   )
 
   const handleUpdateCategory = useCallback(
-    async (data: { name: string; icon_type: string | null; icon_value: string | null }) => {
+    async (data: { name: string; icon_type: string | null; icon_value: string | null; system_prompt: string | null }) => {
       if (!editingCategory) return
       await updateCategory(editingCategory.id, {
         name: data.name,
         icon_type: data.icon_type,
         icon_value: data.icon_value,
+        system_prompt: data.system_prompt,
       })
       setEditingCategory(null)
     },
@@ -1315,6 +1317,7 @@ export function ChatSidebar() {
         initialName={editingCategory?.name ?? ''}
         initialIconType={editingCategory?.icon_type}
         initialIconValue={editingCategory?.icon_value}
+        initialSystemPrompt={editingCategory?.system_prompt}
         title={editingCategory ? t('chat.editCategory') : t('chat.createCategory')}
       />
 
