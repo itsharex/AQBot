@@ -23,6 +23,7 @@ pub struct AppState {
     pub webdav_sync_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     pub vector_store: Arc<aqbot_core::vector_store::VectorStore>,
     pub stream_cancel_flags: Arc<Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>>,
+    pub agent_permission_senders: Arc<Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<String>>>>,
 }
 
 mod commands;
@@ -257,6 +258,13 @@ pub fn run() {
             // storage
             commands::storage::get_storage_inventory,
             commands::storage::open_storage_directory,
+            // agent
+            commands::agent::agent_query,
+            commands::agent::agent_cancel,
+            commands::agent::agent_update_session,
+            commands::agent::agent_get_session,
+            commands::agent::agent_ensure_workspace,
+            commands::agent::agent_approve,
         ])
         .setup(|app| {
             // Force overlay (auto-hide) scrollbar style on macOS.
@@ -396,7 +404,14 @@ pub fn run() {
                 webdav_sync_handle: Arc::new(Mutex::new(None)),
                 vector_store: Arc::new(vector_store),
                 stream_cancel_flags: Arc::new(Mutex::new(std::collections::HashMap::new())),
+                agent_permission_senders: Arc::new(Mutex::new(std::collections::HashMap::new())),
             });
+
+            // Reset any agent sessions that were running when app crashed/closed
+            {
+                let sea_db = app.state::<AppState>().sea_db.clone();
+                let _ = rt.block_on(aqbot_core::repo::agent_session::reset_running_sessions(&sea_db));
+            }
 
             if let Some(main_window) = app.get_webview_window("main") {
                 // On Windows, hide native decorations so the custom TitleBar is

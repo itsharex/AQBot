@@ -174,6 +174,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 name = "aqbot"
 version = "0.0.1"
 dependencies = [
+ "aqbot-agent",
  "aqbot-core",
  "aqbot-gateway",
  "aqbot-providers",
@@ -183,6 +184,7 @@ dependencies = [
  "font-kit",
  "futures",
  "objc2 0.6.4",
+ "open-agent-sdk",
  "rcgen",
  "rustls",
  "sea-orm",
@@ -202,6 +204,22 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "aqbot-agent"
+version = "0.1.0"
+dependencies = [
+ "aqbot-core",
+ "aqbot-providers",
+ "async-trait",
+ "futures",
+ "open-agent-sdk",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4034,6 +4052,30 @@ dependencies = [
  "is-wsl",
  "libc",
  "pathdiff",
+]
+
+[[package]]
+name = "open-agent-sdk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "futures",
+ "glob",
+ "pin-project-lite",
+ "regex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

@@ -776,7 +776,7 @@ const DEFAULT_TITLE_PROMPT: &str = "You are a title generator. Based on the conv
 
 /// Generate an AI-powered conversation title using the configured title summary model.
 /// Returns Err with the actual error message if generation fails.
-async fn generate_ai_title(
+pub async fn generate_ai_title(
     db: &sea_orm::DatabaseConnection,
     user_content: &str,
     assistant_content: &str,
@@ -1424,6 +1424,7 @@ fn spawn_stream_task(
                     &server_id_for_exec,
                     &tc.function.name,
                     Some(&tc.function.arguments),
+                    None,
                 )
                 .await;
 

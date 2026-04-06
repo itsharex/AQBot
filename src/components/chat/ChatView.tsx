@@ -13,7 +13,8 @@ import type { BubbleItemType, BubbleListRef, RoleType } from '@ant-design/x/es/b
 import type { PromptsItemType } from '@ant-design/x/es/prompts';
 import NodeRenderer, { setCustomComponents, type NodeComponentProps } from 'markstream-react';
 import { useTranslation } from 'react-i18next';
-import { useConversationStore, useProviderStore, useSettingsStore } from '@/stores';
+import { useConversationStore, useProviderStore, useSettingsStore, useAgentStore } from '@/stores';
+import { setupAgentEventListeners } from '@/stores/agentStore';
 import { useUserProfileStore } from '@/stores/userProfileStore';
 import { useResolvedDarkMode } from '@/hooks/useResolvedDarkMode';
 import { InputArea } from './InputArea';
@@ -29,6 +30,8 @@ import { formatTokenCount, formatSpeed, formatDuration } from '../gateway/tokenF
 import { getStreamingLoadingState } from './chatStreaming';
 import { buildAssistantDisplayContent, shouldHideAssistantBubble } from './toolCallDisplay';
 import { ChatScrollIndicator } from './ChatScrollIndicator';
+import PermissionCard from './PermissionCard';
+import { ToolCallCard } from './ToolCallCard';
 
 import { invoke } from '@/lib/invoke';
 import { useResolvedAvatarSrc } from '@/hooks/useResolvedAvatarSrc';
@@ -1573,6 +1576,13 @@ export function ChatView() {
     setShowScrollToBottom(false);
   }, [activeConversationId]);
 
+  // Load agent tool history from DB on conversation switch
+  useEffect(() => {
+    if (activeConversation?.mode === 'agent' && activeConversationId) {
+      useAgentStore.getState().loadToolHistory(activeConversationId);
+    }
+  }, [activeConversationId, activeConversation?.mode]);
+
   // Show store errors as notifications
   useEffect(() => {
     if (storeError) {
@@ -1580,6 +1590,20 @@ export function ChatView() {
       useConversationStore.setState({ error: null });
     }
   }, [storeError, messageApi]);
+
+  // ── Agent event listeners ────────────────────────────────────────────
+  useEffect(() => {
+    const cleanup = setupAgentEventListeners();
+    return cleanup;
+  }, []);
+
+  const currentAgentStatus = useAgentStore(
+    (s) => (activeConversationId ? s.agentStatus[activeConversationId] : undefined),
+  );
+
+  const agentToolCalls = useAgentStore((s) => s.toolCalls);
+  const agentPendingPermissions = useAgentStore((s) => s.pendingPermissions);
+  const agentQueryStats = useAgentStore((s) => s.queryStats);
 
   const handleTitleClick = useCallback(() => {
     if (!activeConversation) return;
@@ -2072,8 +2096,10 @@ export function ChatView() {
     const { bubbleLoading: rawBubbleLoading, footerLoading } = getStreamingLoadingState(isStreaming, bubbleData.content);
     // In multi-model mode, never hide the footer (which contains ModelTags) via
     // the Ant Design Bubble loading state — Bubble hides footer when loading=true.
+    // In agent mode, never hide content because tool call cards must remain visible.
     const isMultiModelMsg = !!multiModelParentId && msg?.parent_message_id === multiModelParentId;
-    const bubbleLoading = isMultiModelMsg ? false : rawBubbleLoading;
+    const isAgentMsg = activeConversation?.mode === 'agent';
+    const bubbleLoading = (isMultiModelMsg || isAgentMsg) ? false : rawBubbleLoading;
     return {
       placement: 'start' as const,
       ...getBubbleVariant(false),
@@ -2092,16 +2118,71 @@ export function ChatView() {
             </span>
           );
         }
+
+        const isAgentMode = activeConversation?.mode === 'agent';
+        const allToolCalls = Object.values(agentToolCalls);
+        const msgToolCalls = isAgentMode && msg
+          ? allToolCalls.filter((tc) => tc.assistantMessageId === msg.id)
+          : [];
+        const msgPermissions = isAgentMode && msg && activeConversationId
+          ? Object.values(agentPendingPermissions).filter((pr) =>
+              pr.conversationId === activeConversationId && (
+                pr.assistantMessageId === msg.id ||
+                // Fallback: permission emitted before assistant message ID was set
+                (pr.assistantMessageId === '' && msg.id === streamingMessageId)
+              )
+            )
+          : [];
+
+        // In agent mode: show inline loading dots only when no content AND no tool calls yet
+        if (isAgentMsg && rawBubbleLoading && msgToolCalls.length === 0 && msgPermissions.length === 0) {
+          return (
+            <span className="aqbot-streaming-dots" aria-hidden="true">
+              <span /><span /><span />
+            </span>
+          );
+        }
+
         return (
-          <AssistantMarkdown
-            content={content}
-            nodes={parsedNodes}
-            isDarkMode={isDarkMode}
-            isStreaming={isStreaming}
-            codeBlockDarkTheme={codeBlockDarkTheme}
-            codeBlockThemes={codeBlockThemes}
-            codeFontFamily={settings.code_font_family || undefined}
-          />
+          <>
+            {msgToolCalls.map((tc) => (
+              <ToolCallCard
+                key={tc.toolUseId}
+                toolName={tc.toolName}
+                status={tc.executionStatus === 'failed' ? 'error' : tc.executionStatus}
+                input={JSON.stringify(tc.input, null, 2)}
+                output={tc.output}
+                isError={tc.isError}
+              />
+            ))}
+            {msgPermissions.map((pr) => {
+              const resolvedTc = agentToolCalls[pr.toolUseId];
+              const permStatus = resolvedTc?.approvalStatus === 'approved'
+                ? 'approved'
+                : resolvedTc?.approvalStatus === 'denied'
+                  ? 'denied'
+                  : 'pending';
+              return (
+                <PermissionCard
+                  key={pr.toolUseId}
+                  conversationId={pr.conversationId}
+                  toolUseId={pr.toolUseId}
+                  toolName={pr.toolName}
+                  input={pr.input}
+                  status={permStatus}
+                />
+              );
+            })}
+            <AssistantMarkdown
+              content={content}
+              nodes={parsedNodes}
+              isDarkMode={isDarkMode}
+              isStreaming={isStreaming}
+              codeBlockDarkTheme={codeBlockDarkTheme}
+              codeBlockThemes={codeBlockThemes}
+              codeFontFamily={settings.code_font_family || undefined}
+            />
+          </>
         );
       },
       header: (() => {
@@ -2154,6 +2235,32 @@ export function ChatView() {
             getModelDisplayInfo={getModelDisplayInfo}
             isStreaming={isStreaming}
           />
+          {activeConversation?.mode === 'agent' && agentQueryStats[msg.id] && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              color: token.colorTextDescription,
+              lineHeight: '16px',
+              marginTop: -6,
+              marginBottom: 4,
+              flexWrap: 'wrap',
+            }}>
+              {agentQueryStats[msg.id].inputTokens != null && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                  <ArrowUp size={10} />
+                  {formatTokenCount(agentQueryStats[msg.id].inputTokens!)} tokens
+                </span>
+              )}
+              {agentQueryStats[msg.id].outputTokens != null && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                  <ArrowDown size={10} />
+                  {formatTokenCount(agentQueryStats[msg.id].outputTokens!)} tokens
+                </span>
+              )}
+            </div>
+          )}
         </div>
       ) : footerLoading ? (
         <div
@@ -2172,7 +2279,7 @@ export function ChatView() {
         </div>
       ) : null,
     };
-  }, [activeConversationId, aiContentNodesById, assistantByParentId, codeBlockDarkTheme, codeBlockThemes, formatTime, getBubbleVariant, getModelDisplayInfo, isDarkMode, messageById, multiModelParentId, renderConvIconForChat, streaming, streamingMessageId, t, token.colorPrimary, token.colorTextDescription]);
+  }, [activeConversation, activeConversationId, agentPendingPermissions, agentQueryStats, agentToolCalls, aiContentNodesById, assistantByParentId, codeBlockDarkTheme, codeBlockThemes, formatTime, getBubbleVariant, getModelDisplayInfo, isDarkMode, messageById, multiModelParentId, renderConvIconForChat, streaming, streamingMessageId, t, token.colorPrimary, token.colorTextDescription]);
 
   const contextClearRole = useCallback((bubbleData: BubbleItemType) => {
     const msgId = String(bubbleData.content ?? '');
@@ -2504,6 +2611,22 @@ export function ChatView() {
           </>
         )}
       </div>
+
+      {/* Agent status bar */}
+      {currentAgentStatus && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 24px',
+            fontSize: 13,
+            color: token.colorTextSecondary,
+          }}
+        >
+          <Spin size="small" /> {currentAgentStatus}
+        </div>
+      )}
 
       {/* Input Area */}
       <div className="relative">

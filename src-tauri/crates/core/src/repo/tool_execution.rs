@@ -18,6 +18,7 @@ fn model_to_tool_execution(m: tool_executions::Model) -> ToolExecution {
         error_message: m.error_message,
         duration_ms: m.duration_ms,
         created_at: m.created_at,
+        approval_status: m.approval_status,
     }
 }
 
@@ -41,6 +42,7 @@ pub async fn create_tool_execution(
     server_id: &str,
     tool_name: &str,
     input_preview: Option<&str>,
+    approval_status: Option<&str>,
 ) -> Result<ToolExecution> {
     let id = gen_id();
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -57,6 +59,7 @@ pub async fn create_tool_execution(
         error_message: Set(None),
         duration_ms: Set(None),
         created_at: Set(now),
+        approval_status: Set(approval_status.map(|s| s.to_string())),
     }
     .insert(db)
     .await?;
@@ -85,6 +88,23 @@ pub async fn update_tool_execution_status(
     am.status = Set(status.to_string());
     am.output_preview = Set(output.map(|s| s.to_string()));
     am.error_message = Set(error.map(|s| s.to_string()));
+    am.update(db).await?;
+
+    Ok(())
+}
+
+pub async fn update_tool_execution_approval_status(
+    db: &DatabaseConnection,
+    id: &str,
+    approval_status: &str,
+) -> Result<()> {
+    let model = tool_executions::Entity::find_by_id(id)
+        .one(db)
+        .await?
+        .ok_or_else(|| AQBotError::NotFound(format!("ToolExecution {}", id)))?;
+
+    let mut am: tool_executions::ActiveModel = model.into();
+    am.approval_status = Set(Some(approval_status.to_string()));
     am.update(db).await?;
 
     Ok(())

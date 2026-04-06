@@ -923,7 +923,22 @@
     "ok": "確定",
     "selectAll": "全選",
     "cut": "剪下",
-    "paste": "貼上"
+    "paste": "貼上",
+    "agentMode": "Agent",
+    "chatMode": "問答",
+    "permissionDefault": "預設",
+    "permissionAcceptEdits": "允許編輯",
+    "permissionFullAccess": "完全存取",
+    "selectDirectory": "選擇目錄",
+    "workingDirectory": "工作目錄",
+    "permissionRequired": "需要權限",
+    "toolInput": "工具輸入",
+    "allowOnce": "允許一次",
+    "allowAlways": "始終允許",
+    "deny": "拒絕",
+    "approved": "已批准",
+    "denied": "已拒絕",
+    "expired": "已過期（Agent 已斷開）"
   },
   "image": {
     "loadError": "圖片載入失敗",

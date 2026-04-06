@@ -11,3 +11,4 @@ export { useMcpStore } from './mcpStore';
 export { useKnowledgeStore } from './knowledgeStore';
 export { useMemoryStore } from './memoryStore';
 export { useBackupStore } from './backupStore';
+export { useAgentStore } from './agentStore';

@@ -19,3 +19,4 @@ pub mod search_provider;
 pub mod settings;
 pub mod stored_file;
 pub mod tool_execution;
+pub mod agent_session;

@@ -32,6 +32,7 @@ pub struct Model {
     pub context_compression: i32,
     pub category_id: Option<String>,
     pub parent_conversation_id: Option<String>,
+    pub mode: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

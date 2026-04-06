@@ -5,18 +5,21 @@ import { useTranslation } from 'react-i18next';
 
 interface ToolCallCardProps {
   toolName: string;
-  serverName: string;
-  status: 'running' | 'success' | 'error';
+  serverName?: string;
+  status: 'queued' | 'running' | 'success' | 'error' | 'cancelled';
   input?: string;
   output?: string;
+  isError?: boolean;
   startedAt?: number;
   finishedAt?: number;
 }
 
 const statusConfig = {
+  queued: { icon: <Loader size={14} />, color: 'default' },
   running: { icon: <Loader size={14} className="animate-spin" />, color: 'blue' },
   success: { icon: <CheckCircle size={14} />, color: 'green' },
   error: { icon: <XCircle size={14} />, color: 'red' },
+  cancelled: { icon: <XCircle size={14} />, color: 'default' },
 } as const;
 
 export function ToolCallCard({
@@ -25,6 +28,7 @@ export function ToolCallCard({
   status,
   input,
   output,
+  isError,
   startedAt,
   finishedAt,
 }: ToolCallCardProps) {
@@ -84,6 +88,7 @@ export function ToolCallCard({
               wordBreak: 'break-all',
               maxHeight: 200,
               overflow: 'auto',
+              color: isError ? token.colorError : undefined,
             }}
           >
             {output}
@@ -99,7 +104,7 @@ export function ToolCallCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <Wrench size={14} />
         <Typography.Text>{toolName}</Typography.Text>
-        <Tag>{serverName}</Tag>
+        {serverName && <Tag>{serverName}</Tag>}
         <Tag icon={statusIcon} color={statusColor}>
           {status}
         </Tag>

@@ -35,4 +35,6 @@ pub mod retrieval_hits;
 
 pub mod stored_files;
 
+pub mod agent_sessions;
+
 pub use sea_orm;

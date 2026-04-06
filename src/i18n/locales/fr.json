@@ -923,7 +923,22 @@
     "ok": "OK",
     "selectAll": "Tout sélectionner",
     "cut": "Couper",
-    "paste": "Coller"
+    "paste": "Coller",
+    "agentMode": "Agent",
+    "chatMode": "Chat",
+    "permissionDefault": "Par défaut",
+    "permissionAcceptEdits": "Accepter les modifications",
+    "permissionFullAccess": "Accès complet",
+    "selectDirectory": "Sélectionner un répertoire",
+    "workingDirectory": "Répertoire de travail",
+    "permissionRequired": "Autorisation requise",
+    "toolInput": "Entrée de l'outil",
+    "allowOnce": "Autoriser une fois",
+    "allowAlways": "Toujours autoriser",
+    "deny": "Refuser",
+    "approved": "Approuvé",
+    "denied": "Refusé",
+    "expired": "Expiré (Agent déconnecté)"
   },
   "image": {
     "loadError": "Échec du chargement de l'image",

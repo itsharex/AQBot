@@ -282,17 +282,19 @@ fn build_request(request: &ChatRequest, messages: &[ChatMessage], stream: bool) 
         _ => "xhigh".to_string(),
     });
 
-    // Use max_completion_tokens when: model config says so, or reasoning mode, or o-series models
+    // Use max_completion_tokens when: model config says so, reasoning mode,
+    // o-series models, or gpt-5+ (which deprecate max_tokens)
     let use_completion_tokens = request.use_max_completion_tokens == Some(true)
         || reasoning_effort.is_some()
         || request.model.starts_with("o1")
         || request.model.starts_with("o3")
-        || request.model.starts_with("o4");
+        || request.model.starts_with("o4")
+        || request.model.starts_with("gpt-5");
 
     let (max_tokens, max_completion_tokens) = if use_completion_tokens {
-        (None, request.max_tokens)
+        (None, request.max_tokens.filter(|&v| v > 0))
     } else {
-        (request.max_tokens, None)
+        (request.max_tokens.filter(|&v| v > 0), None)
     };
 
     OpenAIRequest {

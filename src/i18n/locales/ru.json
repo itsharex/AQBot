@@ -923,7 +923,22 @@
     "ok": "ОК",
     "selectAll": "Выбрать все",
     "cut": "Вырезать",
-    "paste": "Вставить"
+    "paste": "Вставить",
+    "agentMode": "Agent",
+    "chatMode": "Chat",
+    "permissionDefault": "По умолчанию",
+    "permissionAcceptEdits": "Разрешить правки",
+    "permissionFullAccess": "Полный доступ",
+    "selectDirectory": "Выбрать каталог",
+    "workingDirectory": "Рабочий каталог",
+    "permissionRequired": "Требуется разрешение",
+    "toolInput": "Ввод инструмента",
+    "allowOnce": "Разрешить один раз",
+    "allowAlways": "Всегда разрешать",
+    "deny": "Отклонить",
+    "approved": "Одобрено",
+    "denied": "Отклонено",
+    "expired": "Истекло (Agent отключён)"
   },
   "image": {
     "loadError": "Ошибка загрузки изображения",

@@ -42,6 +42,7 @@ export type ToolExecution = {
   errorMessage?: string;
   durationMs?: number;
   createdAt: string;
+  approvalStatus?: string;
 };
 
 export type CreateMcpServerInput = {

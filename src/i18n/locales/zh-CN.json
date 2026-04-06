@@ -923,7 +923,22 @@
     "ok": "确定",
     "selectAll": "全选",
     "cut": "剪切",
-    "paste": "粘贴"
+    "paste": "粘贴",
+    "agentMode": "Agent",
+    "chatMode": "问答",
+    "permissionDefault": "默认",
+    "permissionAcceptEdits": "允许编辑",
+    "permissionFullAccess": "完全访问",
+    "selectDirectory": "选择目录",
+    "workingDirectory": "工作目录",
+    "permissionRequired": "需要权限",
+    "toolInput": "工具输入",
+    "allowOnce": "允许一次",
+    "allowAlways": "始终允许",
+    "deny": "拒绝",
+    "approved": "已批准",
+    "denied": "已拒绝",
+    "expired": "已过期（Agent 已断开）"
   },
   "image": {
     "loadError": "图片加载失败",

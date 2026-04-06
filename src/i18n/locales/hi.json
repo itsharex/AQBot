@@ -923,7 +923,22 @@
     "ok": "ठीक है",
     "selectAll": "सब चुनें",
     "cut": "काटें",
-    "paste": "चिपकाएँ"
+    "paste": "चिपकाएँ",
+    "agentMode": "Agent",
+    "chatMode": "Chat",
+    "permissionDefault": "डिफ़ॉल्ट",
+    "permissionAcceptEdits": "संपादन स्वीकारें",
+    "permissionFullAccess": "पूर्ण पहुँच",
+    "selectDirectory": "निर्देशिका चुनें",
+    "workingDirectory": "कार्य निर्देशिका",
+    "permissionRequired": "अनुमति आवश्यक",
+    "toolInput": "टूल इनपुट",
+    "allowOnce": "एक बार अनुमति दें",
+    "allowAlways": "हमेशा अनुमति दें",
+    "deny": "अस्वीकार करें",
+    "approved": "स्वीकृत",
+    "denied": "अस्वीकृत",
+    "expired": "समाप्त (Agent डिस्कनेक्ट हो गया)"
   },
   "image": {
     "loadError": "छवि लोड करने में विफल",

@@ -923,7 +923,22 @@
     "ok": "OK",
     "selectAll": "Alle auswählen",
     "cut": "Ausschneiden",
-    "paste": "Einfügen"
+    "paste": "Einfügen",
+    "agentMode": "Agent",
+    "chatMode": "Chat",
+    "permissionDefault": "Standard",
+    "permissionAcceptEdits": "Bearbeitungen erlauben",
+    "permissionFullAccess": "Vollzugriff",
+    "selectDirectory": "Verzeichnis auswählen",
+    "workingDirectory": "Arbeitsverzeichnis",
+    "permissionRequired": "Berechtigung erforderlich",
+    "toolInput": "Tool-Eingabe",
+    "allowOnce": "Einmal erlauben",
+    "allowAlways": "Immer erlauben",
+    "deny": "Ablehnen",
+    "approved": "Genehmigt",
+    "denied": "Abgelehnt",
+    "expired": "Abgelaufen (Agent getrennt)"
   },
   "image": {
     "loadError": "Bild konnte nicht geladen werden",

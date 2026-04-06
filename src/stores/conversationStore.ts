@@ -18,6 +18,10 @@ import type {
   ConversationWorkspaceSnapshot,
   ConversationBranch,
   CompareResponsesResult,
+  AgentDoneEvent,
+  AgentErrorEvent,
+  AgentStreamTextEvent,
+  AgentStreamThinkingEvent,
 } from '@/types';
 
 let _unlisten: UnlistenFn | null = null;
@@ -309,6 +313,8 @@ interface ConversationState {
   batchDelete: (ids: string[]) => Promise<void>;
   batchArchive: (ids: string[]) => Promise<void>;
   sendMessage: (content: string, attachments?: AttachmentInput[], searchProviderId?: string | null) => Promise<void>;
+  /** Send a message in agent mode (non-streaming MVP) */
+  sendAgentMessage: (content: string, attachments?: AttachmentInput[]) => Promise<void>;
   regenerateMessage: (targetMessageId?: string) => Promise<void>;
   regenerateWithModel: (targetMessageId: string, providerId: string, modelId: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -1233,6 +1239,247 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
+  sendAgentMessage: async (content, attachments = []) => {
+    const conversationId = get().activeConversationId;
+    if (!conversationId) throw new Error('No active conversation');
+
+    const conversation = get().conversations.find((c) => c.id === conversationId);
+    if (!conversation) throw new Error('Conversation not found');
+
+    const providerId = conversation.provider_id;
+    const modelId = conversation.model_id;
+
+    // Optimistic user message
+    const optimisticUserMsg: Message = {
+      id: `temp-user-${Date.now()}`,
+      conversation_id: conversationId,
+      role: 'user',
+      content,
+      provider_id: null,
+      model_id: null,
+      token_count: null,
+      attachments: attachments.map((a) => ({
+        id: `temp-att-${Date.now()}`,
+        file_name: a.file_name,
+        file_type: a.file_type,
+        file_path: '',
+        file_size: a.file_size,
+        data: a.data,
+      })),
+      thinking: null,
+      tool_calls_json: null,
+      tool_call_id: null,
+      created_at: Date.now(),
+      parent_message_id: null,
+      version_index: 0,
+      is_active: true,
+      status: 'complete',
+    };
+
+    // Placeholder assistant message
+    let currentMsgId = `temp-agent-${Date.now()}`;
+    const placeholderAssistant: Message = {
+      id: currentMsgId,
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: '',
+      provider_id: providerId,
+      model_id: modelId,
+      token_count: null,
+      attachments: [],
+      thinking: null,
+      tool_calls_json: null,
+      tool_call_id: null,
+      created_at: Date.now(),
+      parent_message_id: null,
+      version_index: 0,
+      is_active: true,
+      status: 'partial',
+    };
+
+    set((s) => ({
+      messages: [...s.messages, optimisticUserMsg, placeholderAssistant],
+      streaming: true,
+      streamingConversationId: conversationId,
+      streamingMessageId: currentMsgId,
+    }));
+
+    // Set up event listeners BEFORE invoking to avoid race conditions
+    let unlistenDone: UnlistenFn | null = null;
+    let unlistenError: UnlistenFn | null = null;
+    let unlistenStreamText: UnlistenFn | null = null;
+    let unlistenStreamThinking: UnlistenFn | null = null;
+    let unlistenMessageId: UnlistenFn | null = null;
+
+    const cleanup = () => {
+      unlistenStreamText?.();
+      unlistenStreamThinking?.();
+      unlistenDone?.();
+      unlistenError?.();
+      unlistenMessageId?.();
+      unlistenStreamText = null;
+      unlistenStreamThinking = null;
+      unlistenDone = null;
+      unlistenError = null;
+      unlistenMessageId = null;
+    };
+
+    try {
+      const eventPromise = new Promise<void>((resolve, reject) => {
+        // Listen for the real assistant message ID from the backend
+        // This replaces the temp ID so tool call events can be matched
+        listen<{ conversationId: string; assistantMessageId: string }>('agent-message-id', (event) => {
+          if (event.payload.conversationId !== conversationId) return;
+          const realId = event.payload.assistantMessageId;
+          const oldId = currentMsgId;
+          console.log(`[sendAgentMessage] agent-message-id received: ${oldId} → ${realId}`);
+          currentMsgId = realId;
+          set((s) => ({
+            streamingMessageId: realId,
+            messages: s.messages.map((m) =>
+              m.id === oldId ? { ...m, id: realId } : m
+            ),
+          }));
+        }).then((fn) => { unlistenMessageId = fn; });
+
+        // Listen for incremental text chunks
+        listen<AgentStreamTextEvent>('agent-stream-text', (event) => {
+          if (event.payload.conversationId !== conversationId) return;
+
+          set((s) => ({
+            messages: s.messages.map((m) => {
+              if (m.id === currentMsgId) {
+                return { ...m, content: (m.content || '') + event.payload.text };
+              }
+              return m;
+            }),
+          }));
+        }).then((fn) => { unlistenStreamText = fn; });
+
+        // Listen for incremental thinking chunks
+        listen<AgentStreamThinkingEvent>('agent-stream-thinking', (event) => {
+          if (event.payload.conversationId !== conversationId) return;
+
+          set((s) => ({
+            thinkingActiveMessageIds: new Set([...s.thinkingActiveMessageIds, currentMsgId]),
+            messages: s.messages.map((m) => {
+              if (m.id === currentMsgId) {
+                return { ...m, thinking: (m.thinking || '') + event.payload.thinking };
+              }
+              return m;
+            }),
+          }));
+        }).then((fn) => { unlistenStreamThinking = fn; });
+
+        // Listen for agent-done — correction overwrite with final content
+        listen<AgentDoneEvent>('agent-done', (event) => {
+          if (event.payload.conversationId !== conversationId) return;
+          // Skip if streaming was already cancelled (avoid stale fetchMessages re-render)
+          const isStillStreaming = get().streaming && get().streamingMessageId === currentMsgId;
+          if (!isStillStreaming) {
+            cleanup();
+            resolve();
+            return;
+          }
+
+          set((s) => ({
+            streaming: false,
+            streamingMessageId: null,
+            streamingConversationId: null,
+            thinkingActiveMessageIds: (() => {
+              const next = new Set(s.thinkingActiveMessageIds);
+              next.delete(currentMsgId);
+              return next;
+            })(),
+            messages: s.messages.map((m) => {
+              if (m.id === currentMsgId) {
+                return {
+                  ...m,
+                  id: event.payload.assistantMessageId || m.id,
+                  content: event.payload.text,
+                  status: 'complete' as const,
+                  prompt_tokens: event.payload.usage?.input_tokens ?? null,
+                  completion_tokens: event.payload.usage?.output_tokens ?? null,
+                };
+              }
+              return m;
+            }),
+          }));
+
+          cleanup();
+          // Fetch messages to fully sync with backend (real user message ID, etc.)
+          get().fetchMessages(conversationId);
+          resolve();
+        }).then((fn) => { unlistenDone = fn; });
+
+        // Listen for agent-error
+        listen<AgentErrorEvent>('agent-error', (event) => {
+          if (event.payload.conversationId !== conversationId) return;
+          // Skip if streaming was already cancelled
+          const isStillStreaming = get().streaming && get().streamingMessageId === currentMsgId;
+          if (!isStillStreaming) {
+            cleanup();
+            resolve();
+            return;
+          }
+
+          set((s) => ({
+            streaming: false,
+            streamingMessageId: null,
+            streamingConversationId: null,
+            thinkingActiveMessageIds: (() => {
+              const next = new Set(s.thinkingActiveMessageIds);
+              next.delete(currentMsgId);
+              return next;
+            })(),
+            messages: s.messages.map((m) => {
+              if (m.id === currentMsgId) {
+                return {
+                  ...m,
+                  content: event.payload.message,
+                  status: 'error' as const,
+                };
+              }
+              return m;
+            }),
+          }));
+
+          cleanup();
+          reject(new Error(event.payload.message));
+        }).then((fn) => { unlistenError = fn; });
+      });
+
+      // Invoke the backend command (this creates the real user message in DB)
+      await invoke('agent_query', {
+        conversationId,
+        prompt: content,
+        providerId,
+        modelId,
+      });
+
+      // Wait for agent-done or agent-error event
+      await eventPromise;
+    } catch (e) {
+      cleanup();
+      const errMsg = String(e);
+      console.error('[sendAgentMessage] error:', errMsg);
+
+      // If streaming is still true, the error came from invoke itself (not an event)
+      if (get().streaming && (get().streamingMessageId === currentMsgId)) {
+        set((s) => ({
+          streaming: false,
+          streamingMessageId: null,
+          streamingConversationId: null,
+          messages: s.messages.map((m) =>
+            m.id === currentMsgId
+              ? { ...m, content: errMsg, status: 'error' as const }
+              : m
+          ),
+        }));
+      }
+    }
+  },
+
   regenerateMessage: async (targetMessageId?: string) => {
     const conversationId = get().activeConversationId;
     if (!conversationId) throw new Error('No active conversation');
@@ -2127,6 +2374,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const conversationId = get().streamingConversationId ?? get().activeConversationId;
     if (conversationId && isTauri()) {
       invoke('cancel_stream', { conversationId }).catch(() => {});
+      // Also cancel the agent if in agent mode
+      const conv = get().conversations.find((c) => c.id === conversationId);
+      if (conv?.mode === 'agent') {
+        invoke('agent_cancel', { conversationId }).catch(() => {});
+      }
     }
     // Mark the current streaming message as partial
     const streamMsgId = get().streamingMessageId;

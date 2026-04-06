@@ -31,6 +31,7 @@ fn conversation_from_entity(m: conversations::Model) -> Conversation {
         context_compression: m.context_compression != 0,
         category_id: m.category_id,
         parent_conversation_id: m.parent_conversation_id,
+        mode: m.mode,
         created_at: m.created_at,
         updated_at: m.updated_at,
     }
@@ -173,6 +174,9 @@ pub async fn update_conversation(
     }
     if let Some(parent_conversation_id) = input.parent_conversation_id {
         am.parent_conversation_id = Set(parent_conversation_id);
+    }
+    if let Some(mode) = input.mode {
+        am.mode = Set(mode);
     }
     am.updated_at = Set(now);
     am.update(db).await?;

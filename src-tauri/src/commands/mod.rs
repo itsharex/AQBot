@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod artifacts;
 pub mod backup;
 pub mod branches;

@@ -228,6 +228,7 @@ pub struct Conversation {
     pub context_compression: bool,
     pub category_id: Option<String>,
     pub parent_conversation_id: Option<String>,
+    pub mode: String,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -336,6 +337,7 @@ pub struct UpdateConversationInput {
     pub category_id: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_double_option")]
     pub parent_conversation_id: Option<Option<String>>,
+    pub mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -982,6 +984,22 @@ pub struct ToolExecution {
     pub error_message: Option<String>,
     pub duration_ms: Option<i64>,
     pub created_at: String,
+    pub approval_status: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSession {
+    pub id: String,
+    pub conversation_id: String,
+    pub cwd: Option<String>,
+    pub permission_mode: String,
+    pub runtime_status: String,
+    pub sdk_context_json: Option<String>,
+    pub total_tokens: i32,
+    pub total_cost_usd: f64,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // Knowledge

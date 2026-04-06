@@ -923,7 +923,22 @@
     "ok": "موافق",
     "selectAll": "تحديد الكل",
     "cut": "قص",
-    "paste": "لصق"
+    "paste": "لصق",
+    "agentMode": "Agent",
+    "chatMode": "Chat",
+    "permissionDefault": "افتراضي",
+    "permissionAcceptEdits": "قبول التعديلات",
+    "permissionFullAccess": "وصول كامل",
+    "selectDirectory": "اختر مجلد",
+    "workingDirectory": "مجلد العمل",
+    "permissionRequired": "الإذن مطلوب",
+    "toolInput": "إدخال الأداة",
+    "allowOnce": "السماح مرة واحدة",
+    "allowAlways": "السماح دائمًا",
+    "deny": "رفض",
+    "approved": "تمت الموافقة",
+    "denied": "مرفوض",
+    "expired": "منتهي الصلاحية (Agent غير متصل)"
   },
   "image": {
     "loadError": "فشل تحميل الصورة",

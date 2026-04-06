@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Button, Tooltip, App, theme, Dropdown, Tag, Popover, Checkbox, Badge } from 'antd';
 import type { MenuProps } from 'antd';
-import { Paperclip, Trash2, Mic, Eraser, Scissors, Globe, Brain, Atom, Plug, SlidersHorizontal, ArrowUp, Square, Check, Zap, ZapOff, Shrink, Upload, GitCompareArrows, X, BookOpen, GripHorizontal, CircleOff, SignalLow, SignalMedium, SignalHigh, Signal } from 'lucide-react';
+import { Paperclip, Trash2, Mic, Eraser, Scissors, Globe, Brain, Atom, Plug, SlidersHorizontal, ArrowUp, Square, Check, Zap, ZapOff, Shrink, Upload, GitCompareArrows, X, BookOpen, GripHorizontal, CircleOff, SignalLow, SignalMedium, SignalHigh, Signal, Bot, MessageSquare, Shield, ShieldCheck, ShieldAlert, FolderOpen, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConversationStore, useProviderStore, useSettingsStore, useSearchStore, useMcpStore, useMemoryStore, useKnowledgeStore } from '@/stores';
 import { useUIStore } from '@/stores/uiStore';
@@ -18,6 +18,8 @@ import { ModelSelector } from './ModelSelector';
 import { SearchProviderTypeIcon, PROVIDER_TYPE_LABELS } from '@/components/shared/SearchProviderIcon';
 import { ModelIcon } from '@lobehub/icons';
 import type { AttachmentInput, RealtimeConfig } from '@/types';
+import { invoke } from '@/lib/invoke';
+import { open } from '@tauri-apps/plugin-dialog';
 
 async function fileToAttachmentInput(file: File): Promise<AttachmentInput> {
   return new Promise((resolve) => {
@@ -78,6 +80,7 @@ export function InputArea() {
   const cancelCurrentStream = useConversationStore((s) => s.cancelCurrentStream);
   const activeConversationId = useConversationStore((s) => s.activeConversationId);
   const sendMessage = useConversationStore((s) => s.sendMessage);
+  const sendAgentMessage = useConversationStore((s) => s.sendAgentMessage);
   const createConversation = useConversationStore((s) => s.createConversation);
   const messages = useConversationStore((s) => s.messages);
   const contextCount = useMemo(() => {
@@ -119,6 +122,12 @@ export function InputArea() {
   const setThinkingBudget = useConversationStore((s) => s.setThinkingBudget);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
 
+  // Agent permission mode state
+  const [agentPermissionMode, setAgentPermissionMode] = useState<string>('default');
+
+  // Agent working directory state
+  const [agentCwd, setAgentCwd] = useState<string | null>(null);
+
   // Knowledge base state
   const knowledgeBases = useKnowledgeStore((s) => s.bases);
   const loadKnowledgeBases = useKnowledgeStore((s) => s.loadBases);
@@ -140,6 +149,7 @@ export function InputArea() {
   const compressContext = useConversationStore((s) => s.compressContext);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const currentMode = activeConversation?.mode || 'chat';
 
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setSettingsSection = useUIStore((s) => s.setSettingsSection);
@@ -163,6 +173,20 @@ export function InputArea() {
   useEffect(() => {
     if (memoryNamespaces.length === 0) loadMemoryNamespaces();
   }, [memoryNamespaces.length, loadMemoryNamespaces]);
+
+  // Fetch agent permission mode on mount/conversation switch
+  useEffect(() => {
+    if (currentMode === 'agent' && activeConversationId) {
+      invoke('agent_get_session', { conversationId: activeConversationId })
+        .then((session: any) => {
+          if (session) {
+            setAgentPermissionMode(session.permission_mode || 'default');
+            setAgentCwd(session.cwd || null);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentMode, activeConversationId]);
 
   // Draft persistence: save old draft & restore new when conversation changes
   useEffect(() => {
@@ -377,6 +401,102 @@ export function InputArea() {
     [setThinkingBudget, thinkingOptions],
   );
 
+  // Agent permission mode menu items
+  const permissionModeItems = useMemo<MenuProps['items']>(() => [
+    {
+      key: 'default',
+      label: t('common.permissionDefault'),
+      icon: <Shield size={14} />,
+    },
+    {
+      key: 'accept_edits',
+      label: t('common.permissionAcceptEdits'),
+      icon: <ShieldCheck size={14} style={{ color: '#1890ff' }} />,
+    },
+    {
+      key: 'full_access',
+      label: t('common.permissionFullAccess'),
+      icon: <ShieldAlert size={14} style={{ color: '#ff4d4f' }} />,
+    },
+  ], [t]);
+
+  const handlePermissionModeChange = useCallback(async (mode: string) => {
+    if (!activeConversationId) return;
+
+    const applyChange = async () => {
+      try {
+        await invoke('agent_update_session', {
+          conversationId: activeConversationId,
+          permissionMode: mode,
+        });
+        setAgentPermissionMode(mode);
+      } catch (e) {
+        console.warn('Failed to update permission mode:', e);
+      }
+    };
+
+    if (mode === 'accept_edits' || mode === 'full_access') {
+      const isFullAccess = mode === 'full_access';
+      modal.confirm({
+        title: isFullAccess
+          ? t('agent.permissionFullAccessWarningTitle', '⚠️ 完全访问模式')
+          : t('agent.permissionAcceptEditsWarningTitle', '⚠️ 允许编辑模式'),
+        content: isFullAccess
+          ? t('agent.permissionFullAccessWarning', 'Agent 将拥有完全访问权限，可以执行任何文件操作且不受路径限制。请确保你信任当前使用的模型和 System Prompt。')
+          : t('agent.permissionAcceptEditsWarning', 'Agent 将自动批准文件编辑操作，无需逐一确认。请确保你了解潜在的安全风险。'),
+        okText: t('common.confirm', '确认'),
+        cancelText: t('common.cancel', '取消'),
+        okButtonProps: isFullAccess ? { danger: true } : undefined,
+        onOk: applyChange,
+      });
+    } else {
+      await applyChange();
+    }
+  }, [activeConversationId, t]);
+
+  const permissionModeIcon = useMemo(() => {
+    switch (agentPermissionMode) {
+      case 'accept_edits': return <ShieldCheck size={14} style={{ color: '#1890ff' }} />;
+      case 'full_access': return <ShieldAlert size={14} style={{ color: '#ff4d4f' }} />;
+      default: return <Shield size={14} />;
+    }
+  }, [agentPermissionMode]);
+
+  const permissionModeLabel = useMemo(() => {
+    switch (agentPermissionMode) {
+      case 'accept_edits': return t('common.permissionAcceptEdits');
+      case 'full_access': return t('common.permissionFullAccess');
+      default: return t('common.permissionDefault');
+    }
+  }, [agentPermissionMode, t]);
+
+  // Agent CWD helpers
+  const abbreviatePath = useCallback((path: string): string => {
+    const segments = path.replace(/\\/g, '/').split('/').filter(Boolean);
+    if (segments.length <= 2) return path;
+    return '…/' + segments.slice(-2).join('/');
+  }, []);
+
+  const handleSelectCwd = useCallback(async () => {
+    if (!activeConversationId) return;
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t('common.selectDirectory'),
+      });
+      if (selected && typeof selected === 'string') {
+        await invoke('agent_update_session', {
+          conversationId: activeConversationId,
+          cwd: selected,
+        });
+        setAgentCwd(selected);
+      }
+    } catch (e) {
+      console.warn('Failed to select working directory:', e);
+    }
+  }, [activeConversationId, t]);
+
   // Knowledge base popover content
   const kbPopoverContent = useMemo(() => {
     if (knowledgeBases.length === 0) {
@@ -580,6 +700,50 @@ export function InputArea() {
     [activeConversation?.model_id],
   );
 
+  const handleModeSwitch = useCallback(async (mode: 'chat' | 'agent') => {
+    if (!activeConversation) return;
+
+    if (mode === 'agent') {
+      modal.confirm({
+        title: t('agent.betaWarningTitle', '🤖 Agent 模式（Beta）'),
+        content: t('agent.betaWarningContent', 'Agent 模式目前为 Beta 测试版，功能可能不稳定。Agent 可以执行代码、读写文件等操作，请确保了解相关风险。'),
+        okText: t('common.confirm', '确认'),
+        cancelText: t('common.cancel', '取消'),
+        onOk: async () => {
+          await updateConversation(activeConversation.id, { mode });
+          // Clear multi-model companion models — not applicable in agent mode
+          if (companionModels.length > 0) {
+            setCompanionModels([]);
+            if (companionStorageKey) localStorage.removeItem(companionStorageKey);
+          }
+          try {
+            // Init agent session
+            const session = await invoke<{ cwd: string | null }>('agent_update_session', {
+              conversationId: activeConversation.id,
+            });
+            // Auto-create workspace if no CWD set
+            if (!session.cwd) {
+              const workspacePath = await invoke<string>('agent_ensure_workspace', {
+                conversationId: activeConversation.id,
+              });
+              await invoke('agent_update_session', {
+                conversationId: activeConversation.id,
+                cwd: workspacePath,
+              });
+              setAgentCwd(workspacePath);
+            } else {
+              setAgentCwd(session.cwd);
+            }
+          } catch (e) {
+            console.warn('Failed to init agent session:', e);
+          }
+        },
+      });
+    } else {
+      await updateConversation(activeConversation.id, { mode });
+    }
+  }, [activeConversation, updateConversation, companionModels, companionStorageKey, modal, t]);
+
   const handleSend = useCallback(async () => {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -618,7 +782,9 @@ export function InputArea() {
           textareaRef.current.style.height = 'auto';
         }
       });
-      if (companionModels.length > 0) {
+      if (currentMode === 'agent') {
+        await sendAgentMessage(trimmed, attachments);
+      } else if (companionModels.length > 0) {
         await sendMultiModelMessage(trimmed, companionModels, attachments, searchEnabled ? searchProviderId : null);
       } else {
         await sendMessage(trimmed, attachments, searchEnabled ? searchProviderId : null);
@@ -638,7 +804,7 @@ export function InputArea() {
         }
       });
     }
-  }, [value, attachedFiles, sendMessage, sendMultiModelMessage, companionModels, activeConversationId, providers, settings, createConversation, messageApi, t, searchEnabled, searchProviderId]);
+  }, [value, attachedFiles, sendMessage, sendAgentMessage, sendMultiModelMessage, companionModels, activeConversationId, providers, settings, createConversation, messageApi, t, searchEnabled, searchProviderId, currentMode]);
 
   const handleFillLastMessage = useCallback(() => {
     if (streaming) return;
@@ -932,7 +1098,7 @@ export function InputArea() {
           <GripHorizontal size={14} style={{ color: token.colorTextQuaternary, opacity: 0.5 }} />
         </div>
         {/* Companion model tags */}
-        {companionModels.length > 0 && (
+        {currentMode !== 'agent' && companionModels.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-3 pt-3 pb-1">
             <span
               className="inline-flex items-center px-2 py-0.5 text-xs"
@@ -1140,15 +1306,17 @@ export function InputArea() {
                 </Badge>
               </Tooltip>
             </Popover>
-            <Tooltip title={t('chat.multiModel.selectTitle')}>
-              <Button
-                type="text"
-                size="small"
-                icon={<GitCompareArrows size={14} />}
-                onClick={() => setMultiModelOpen(true)}
-                style={companionModels.length > 0 ? { color: token.colorPrimary } : undefined}
-              />
-            </Tooltip>
+            {currentMode !== 'agent' && (
+              <Tooltip title={t('chat.multiModel.selectTitle')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<GitCompareArrows size={14} />}
+                  onClick={() => setMultiModelOpen(true)}
+                  style={companionModels.length > 0 ? { color: token.colorPrimary } : undefined}
+                />
+              </Tooltip>
+            )}
             <Dropdown
               menu={{
                 items: [
@@ -1241,41 +1409,6 @@ export function InputArea() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {contextCount > 0 && (
-              <span style={{ fontSize: 11, color: token.colorTextSecondary }}>
-                {contextCount} {t('chat.contextMessages')}
-              </span>
-            )}
-            {contextTokenUsage && (() => {
-              const r = 8, stroke = 2.5, size = (r + stroke) * 2;
-              const circ = 2 * Math.PI * r;
-              const offset = circ * (1 - contextTokenUsage.percent / 100);
-              const color = contextTokenUsage.percent > 80
-                ? token.colorError
-                : contextTokenUsage.percent > 60
-                  ? token.colorWarning
-                  : token.colorPrimary;
-              return (
-                <Popover
-                  content={
-                    <span style={{ fontSize: 12 }}>
-                      {contextTokenUsage.usedTokens.toLocaleString()} / {contextTokenUsage.maxTokens.toLocaleString()} tokens ({contextTokenUsage.percent}%)
-                    </span>
-                  }
-                >
-                  <svg width={size} height={size} style={{ display: 'block', cursor: 'pointer' }}>
-                    <circle cx={r + stroke} cy={r + stroke} r={r} fill="none" stroke={token.colorBorderSecondary} strokeWidth={stroke} />
-                    <circle
-                      cx={r + stroke} cy={r + stroke} r={r}
-                      fill="none" stroke={color} strokeWidth={stroke}
-                      strokeDasharray={circ} strokeDashoffset={offset}
-                      strokeLinecap="round"
-                      transform={`rotate(-90 ${r + stroke} ${r + stroke})`}
-                    />
-                  </svg>
-                </Popover>
-              );
-            })()}
             {streaming ? (
               <Button
                 shape="circle"
@@ -1295,6 +1428,133 @@ export function InputArea() {
               />
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Mode controls bar — below input container */}
+      <div className="flex items-center justify-between px-1 pt-1">
+        <div className="flex items-center gap-1">
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'chat',
+                  icon: <MessageSquare size={14} />,
+                  label: t('common.chatMode'),
+                },
+                {
+                  key: 'agent',
+                  icon: <Bot size={14} />,
+                  label: <>{t('common.agentMode')} <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', marginLeft: 2 }}>Beta</Tag></>,
+                },
+              ],
+              selectedKeys: [currentMode],
+              onClick: ({ key }) => handleModeSwitch(key as 'chat' | 'agent'),
+            }}
+            trigger={['click']}
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={currentMode === 'agent' ? <Bot size={14} /> : <MessageSquare size={14} />}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+            >
+              {currentMode === 'agent' ? <>{t('common.agentMode')} <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', marginLeft: 2, marginRight: 0 }}>Beta</Tag></> : t('common.chatMode')}
+            </Button>
+          </Dropdown>
+          {currentMode === 'agent' && (
+            <Tooltip title={agentCwd || t('common.workingDirectory')}>
+              <Button
+                type="text"
+                size="small"
+                icon={<FolderOpen size={14} />}
+                onClick={handleSelectCwd}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, maxWidth: 200, fontSize: 12 }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {agentCwd ? abbreviatePath(agentCwd) : t('common.selectDirectory')}
+                </span>
+              </Button>
+            </Tooltip>
+          )}
+          {currentMode === 'agent' && agentCwd && (
+            <Tooltip title={t('common.openDirectory', '打开目录')}>
+              <Button
+                type="text"
+                size="small"
+                icon={<ExternalLink size={14} />}
+                onClick={async () => {
+                  try {
+                    const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+                    await revealItemInDir(agentCwd);
+                  } catch (e) {
+                    console.warn('Failed to open directory:', e);
+                  }
+                }}
+                style={{ fontSize: 12, minWidth: 'auto', padding: '0 4px' }}
+              />
+            </Tooltip>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          {currentMode === 'agent' && (
+            <Dropdown
+              menu={{
+                items: permissionModeItems,
+                selectedKeys: [agentPermissionMode],
+                onClick: ({ key }) => handlePermissionModeChange(key),
+              }}
+              trigger={['click']}
+              placement="topRight"
+            >
+              <Button
+                type="text"
+                size="small"
+                icon={permissionModeIcon}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, fontSize: 12,
+                  ...(agentPermissionMode === 'full_access' ? { color: '#ff4d4f' } : {}),
+                }}
+              >
+                {permissionModeLabel}
+              </Button>
+            </Dropdown>
+          )}
+          {contextCount > 0 && (
+            <span style={{ fontSize: 11, color: token.colorTextSecondary }}>
+              {contextCount} {t('chat.contextMessages')}
+            </span>
+          )}
+          {contextTokenUsage && (() => {
+            const r = 8, stroke = 2.5, size = (r + stroke) * 2;
+            const circ = 2 * Math.PI * r;
+            const offset = circ * (1 - contextTokenUsage.percent / 100);
+            const color = contextTokenUsage.percent > 80
+              ? token.colorError
+              : contextTokenUsage.percent > 60
+                ? token.colorWarning
+                : token.colorPrimary;
+            return (
+              <Popover
+                content={
+                  <span style={{ fontSize: 12 }}>
+                    {contextTokenUsage.usedTokens.toLocaleString()} / {contextTokenUsage.maxTokens.toLocaleString()} tokens ({contextTokenUsage.percent}%)
+                  </span>
+                }
+              >
+                <svg width={size} height={size} style={{ display: 'block', cursor: 'pointer' }}>
+                  <circle cx={r + stroke} cy={r + stroke} r={r} fill="none" stroke={token.colorBorderSecondary} strokeWidth={stroke} />
+                  <circle
+                    cx={r + stroke} cy={r + stroke} r={r}
+                    fill="none" stroke={color} strokeWidth={stroke}
+                    strokeDasharray={circ} strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    transform={`rotate(-90 ${r + stroke} ${r + stroke})`}
+                  />
+                </svg>
+              </Popover>
+            );
+          })()}
         </div>
       </div>
 

@@ -923,7 +923,22 @@
     "ok": "OK",
     "selectAll": "すべて選択",
     "cut": "切り取り",
-    "paste": "貼り付け"
+    "paste": "貼り付け",
+    "agentMode": "Agent",
+    "chatMode": "チャット",
+    "permissionDefault": "デフォルト",
+    "permissionAcceptEdits": "編集を許可",
+    "permissionFullAccess": "フルアクセス",
+    "selectDirectory": "ディレクトリを選択",
+    "workingDirectory": "作業ディレクトリ",
+    "permissionRequired": "権限が必要です",
+    "toolInput": "ツール入力",
+    "allowOnce": "一度だけ許可",
+    "allowAlways": "常に許可",
+    "deny": "拒否",
+    "approved": "承認済み",
+    "denied": "拒否済み",
+    "expired": "期限切れ（Agentが切断されました）"
   },
   "image": {
     "loadError": "画像の読み込みに失敗しました",

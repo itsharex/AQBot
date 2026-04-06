@@ -923,7 +923,22 @@
     "ok": "OK",
     "selectAll": "Select all",
     "cut": "Cut",
-    "paste": "Paste"
+    "paste": "Paste",
+    "agentMode": "Agent",
+    "chatMode": "Chat",
+    "permissionDefault": "Default",
+    "permissionAcceptEdits": "Accept Edits",
+    "permissionFullAccess": "Full Access",
+    "selectDirectory": "Select Directory",
+    "workingDirectory": "Working Directory",
+    "permissionRequired": "Permission Required",
+    "toolInput": "Tool Input",
+    "allowOnce": "Allow Once",
+    "allowAlways": "Always Allow",
+    "deny": "Deny",
+    "approved": "Approved",
+    "denied": "Denied",
+    "expired": "Expired (Agent disconnected)"
   },
   "image": {
     "loadError": "Image failed to load",

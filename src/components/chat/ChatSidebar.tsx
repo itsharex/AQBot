@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import { Button, Input, App, theme, Tooltip, Avatar, Checkbox, Dropdown, Empty } from 'antd'
-import { MessageSquarePlus, Search, Archive, ListTodo, Trash2, Pencil, Share, Pin, PinOff, Loader, X, Undo2, ArrowLeft, FileImage, FileCode, FileType, FileText, FolderPlus, FolderOpen, GripVertical, ChevronRight, MessageSquareText } from 'lucide-react'
+import { MessageSquarePlus, Search, Archive, ListTodo, Trash2, Pencil, Share, Pin, PinOff, Loader, X, Undo2, ArrowLeft, FileImage, FileCode, FileType, FileText, FolderPlus, FolderOpen, GripVertical, ChevronRight, MessageSquareText, Bot } from 'lucide-react'
 import { ModelIcon } from '@lobehub/icons'
 import { getConvIcon } from '@/lib/convIcon'
 import { exportAsMarkdown, exportAsText, exportAsPNG, exportAsJSON } from '@/lib/exportChat'
@@ -455,6 +455,8 @@ export function ChatSidebar() {
       } else {
         icon = <Avatar size={20} src={customIcon.value} />
       }
+    } else if (conv.mode === 'agent') {
+      icon = <Avatar size={20} icon={<Bot size={12} />} style={{ backgroundColor: token.colorPrimaryBg, color: token.colorPrimary }} />
     } else if (conv.model_id) {
       icon = <ModelIcon model={conv.model_id} size={20} type="avatar" />
     } else {

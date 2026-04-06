@@ -22,6 +22,7 @@ mod m20250120_000001_add_message_timing;
 mod m20250121_000001_add_conversation_parent_id;
 mod m20250122_000001_merge_thinking_to_content;
 mod m20250123_000001_add_category_system_prompt;
+mod m20250717_000001_add_agent_support;
 
 pub struct Migrator;
 
@@ -51,6 +52,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250121_000001_add_conversation_parent_id::Migration),
             Box::new(m20250122_000001_merge_thinking_to_content::Migration),
             Box::new(m20250123_000001_add_category_system_prompt::Migration),
+            Box::new(m20250717_000001_add_agent_support::Migration),
         ]
     }
 }

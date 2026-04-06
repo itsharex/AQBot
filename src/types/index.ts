@@ -118,6 +118,7 @@ export interface Conversation {
   context_compression: boolean;
   category_id: string | null;
   parent_conversation_id: string | null;
+  mode?: 'chat' | 'agent';
   message_count: number;
   created_at: number;
   updated_at: number;
@@ -212,6 +213,7 @@ export interface UpdateConversationInput {
   enabled_memory_namespace_ids?: string[];
   context_compression?: boolean;
   category_id?: string | null;
+  mode?: 'chat' | 'agent';
 }
 
 // === Gateway System ===
@@ -485,3 +487,4 @@ export * from './memory';
 export * from './artifact';
 export * from './backup';
 export * from './workspace';
+export * from './agent';
