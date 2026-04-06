@@ -921,7 +921,9 @@
     "zoomIn": "拡大",
     "zoomOut": "縮小",
     "ok": "OK",
-    "selectAll": "すべて選択"
+    "selectAll": "すべて選択",
+    "cut": "切り取り",
+    "paste": "貼り付け"
   },
   "image": {
     "loadError": "画像の読み込みに失敗しました",

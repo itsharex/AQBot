@@ -921,7 +921,9 @@
     "zoomIn": "Zoom avant",
     "zoomOut": "Zoom arrière",
     "ok": "OK",
-    "selectAll": "Tout sélectionner"
+    "selectAll": "Tout sélectionner",
+    "cut": "Couper",
+    "paste": "Coller"
   },
   "image": {
     "loadError": "Échec du chargement de l'image",

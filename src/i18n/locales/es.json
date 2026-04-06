@@ -921,7 +921,9 @@
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
     "ok": "Aceptar",
-    "selectAll": "Seleccionar todo"
+    "selectAll": "Seleccionar todo",
+    "cut": "Cortar",
+    "paste": "Pegar"
   },
   "image": {
     "loadError": "Error al cargar la imagen",

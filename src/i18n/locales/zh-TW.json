@@ -921,7 +921,9 @@
     "zoomIn": "放大",
     "zoomOut": "縮小",
     "ok": "確定",
-    "selectAll": "全選"
+    "selectAll": "全選",
+    "cut": "剪下",
+    "paste": "貼上"
   },
   "image": {
     "loadError": "圖片載入失敗",

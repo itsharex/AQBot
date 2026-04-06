@@ -921,7 +921,9 @@
     "zoomIn": "تكبير",
     "zoomOut": "تصغير",
     "ok": "موافق",
-    "selectAll": "تحديد الكل"
+    "selectAll": "تحديد الكل",
+    "cut": "قص",
+    "paste": "لصق"
   },
   "image": {
     "loadError": "فشل تحميل الصورة",

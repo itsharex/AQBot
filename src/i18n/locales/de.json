@@ -921,7 +921,9 @@
     "zoomIn": "Vergrößern",
     "zoomOut": "Verkleinern",
     "ok": "OK",
-    "selectAll": "Alle auswählen"
+    "selectAll": "Alle auswählen",
+    "cut": "Ausschneiden",
+    "paste": "Einfügen"
   },
   "image": {
     "loadError": "Bild konnte nicht geladen werden",

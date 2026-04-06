@@ -921,7 +921,9 @@
     "zoomIn": "放大",
     "zoomOut": "缩小",
     "ok": "确定",
-    "selectAll": "全选"
+    "selectAll": "全选",
+    "cut": "剪切",
+    "paste": "粘贴"
   },
   "image": {
     "loadError": "图片加载失败",

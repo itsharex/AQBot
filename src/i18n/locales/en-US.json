@@ -921,7 +921,9 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "ok": "OK",
-    "selectAll": "Select all"
+    "selectAll": "Select all",
+    "cut": "Cut",
+    "paste": "Paste"
   },
   "image": {
     "loadError": "Image failed to load",
