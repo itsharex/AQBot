@@ -36,6 +36,7 @@ function makePage(messages: Message[], hasOlder: boolean): MessagePage {
     messages,
     has_older: hasOlder,
     oldest_message_id: messages[0]?.id ?? null,
+    total_active_count: messages.length,
   };
 }
 
