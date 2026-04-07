@@ -13,6 +13,7 @@ fn model_to_agent_session(model: agent_sessions::Model) -> AgentSession {
         permission_mode: model.permission_mode,
         runtime_status: model.runtime_status,
         sdk_context_json: model.sdk_context_json,
+        sdk_context_backup_json: model.sdk_context_backup_json,
         total_tokens: model.total_tokens,
         total_cost_usd: model.total_cost_usd,
         created_at: model.created_at,
@@ -55,6 +56,7 @@ pub async fn upsert_agent_session(
             permission_mode: Set(permission_mode.unwrap_or("default").to_string()),
             runtime_status: Set("idle".to_string()),
             sdk_context_json: Set(None),
+            sdk_context_backup_json: Set(None),
             total_tokens: Set(0),
             total_cost_usd: Set(0.0),
             created_at: Set(now.clone()),
@@ -182,5 +184,67 @@ pub async fn update_agent_session_after_query(
     am.total_cost_usd = Set(model.total_cost_usd + cost_delta);
     am.updated_at = Set(now);
     am.update(db).await?;
+    Ok(())
+}
+
+/// Clear the sdk_context_json for an agent session by conversation_id.
+/// Called when conversation messages are cleared to prevent stale history.
+pub async fn clear_sdk_context_by_conversation_id(
+    db: &DatabaseConnection,
+    conversation_id: &str,
+) -> Result<()> {
+    let session = agent_sessions::Entity::find()
+        .filter(agent_sessions::Column::ConversationId.eq(conversation_id))
+        .one(db)
+        .await?;
+
+    if let Some(model) = session {
+        let mut am: agent_sessions::ActiveModel = model.into();
+        am.sdk_context_json = Set(None);
+        am.sdk_context_backup_json = Set(None);
+        am.update(db).await?;
+    }
+    Ok(())
+}
+
+/// Backup current sdk_context_json and clear it.
+/// Called when a context-clear marker is inserted.
+pub async fn backup_and_clear_sdk_context_by_conversation_id(
+    db: &DatabaseConnection,
+    conversation_id: &str,
+) -> Result<()> {
+    let session = agent_sessions::Entity::find()
+        .filter(agent_sessions::Column::ConversationId.eq(conversation_id))
+        .one(db)
+        .await?;
+
+    if let Some(model) = session {
+        let mut am: agent_sessions::ActiveModel = model.clone().into();
+        am.sdk_context_backup_json = Set(model.sdk_context_json);
+        am.sdk_context_json = Set(None);
+        am.update(db).await?;
+    }
+    Ok(())
+}
+
+/// Restore sdk_context_json from backup.
+/// Called when a context-clear marker is removed (undo).
+pub async fn restore_sdk_context_from_backup_by_conversation_id(
+    db: &DatabaseConnection,
+    conversation_id: &str,
+) -> Result<()> {
+    let session = agent_sessions::Entity::find()
+        .filter(agent_sessions::Column::ConversationId.eq(conversation_id))
+        .one(db)
+        .await?;
+
+    if let Some(model) = session {
+        if model.sdk_context_backup_json.is_some() {
+            let mut am: agent_sessions::ActiveModel = model.clone().into();
+            am.sdk_context_json = Set(model.sdk_context_backup_json);
+            am.sdk_context_backup_json = Set(None);
+            am.update(db).await?;
+        }
+    }
     Ok(())
 }

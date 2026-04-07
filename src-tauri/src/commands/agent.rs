@@ -1141,3 +1141,31 @@ pub async fn agent_ensure_workspace(
         .map(|s| s.to_string())
         .ok_or_else(|| "Invalid path encoding".to_string())
 }
+
+/// Backup and clear SDK context when a context-clear marker is inserted.
+#[tauri::command]
+pub async fn agent_backup_and_clear_sdk_context(
+    state: State<'_, AppState>,
+    conversation_id: String,
+) -> Result<(), String> {
+    agent_session::backup_and_clear_sdk_context_by_conversation_id(
+        &state.sea_db,
+        &conversation_id,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Restore SDK context from backup when a context-clear marker is removed.
+#[tauri::command]
+pub async fn agent_restore_sdk_context_from_backup(
+    state: State<'_, AppState>,
+    conversation_id: String,
+) -> Result<(), String> {
+    agent_session::restore_sdk_context_from_backup_by_conversation_id(
+        &state.sea_db,
+        &conversation_id,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}

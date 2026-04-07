@@ -672,6 +672,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         content: '<!-- context-clear -->',
       });
       set((s) => ({ messages: [...s.messages, msg] }));
+      // Backup and clear agent SDK context (no-op if no agent session exists)
+      await invoke('agent_backup_and_clear_sdk_context', { conversationId }).catch(() => {});
     } catch {
       // If backend command doesn't exist yet, add optimistic local message
       const localMsg: Message = {
@@ -696,6 +698,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
   removeContextClear: async (messageId) => {
+    const conversationId = get().activeConversationId;
     if (messageId.startsWith('ctx-clear-') || messageId.startsWith('temp-')) {
       set((s) => ({ messages: s.messages.filter((m) => m.id !== messageId) }));
       return;
@@ -704,6 +707,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     try {
       await invoke('delete_message', { id: messageId });
       set((s) => ({ messages: s.messages.filter((m) => m.id !== messageId) }));
+      // Restore agent SDK context from backup (no-op if no agent session or no backup)
+      if (conversationId) {
+        await invoke('agent_restore_sdk_context_from_backup', { conversationId }).catch(() => {});
+      }
     } catch (e) {
       set({ error: String(e) });
       throw e;

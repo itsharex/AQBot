@@ -269,6 +269,8 @@ pub fn run() {
             commands::agent::agent_get_session,
             commands::agent::agent_ensure_workspace,
             commands::agent::agent_approve,
+            commands::agent::agent_backup_and_clear_sdk_context,
+            commands::agent::agent_restore_sdk_context_from_backup,
         ])
         .setup(|app| {
             // Force overlay (auto-hide) scrollbar style on macOS.

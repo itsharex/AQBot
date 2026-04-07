@@ -11,6 +11,7 @@ pub struct Model {
     pub permission_mode: String,
     pub runtime_status: String,
     pub sdk_context_json: Option<String>,
+    pub sdk_context_backup_json: Option<String>,
     pub total_tokens: i32,
     pub total_cost_usd: f64,
     pub created_at: String,
