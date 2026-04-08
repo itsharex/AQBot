@@ -10,18 +10,22 @@ import {
   Popconfirm,
   Typography,
   Alert,
+  theme,
 } from 'antd';
-import { Plus, Trash2, Copy, Search } from 'lucide-react';
-import { writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
+import { Plus, Trash2, Copy, Check, Search } from 'lucide-react';
 import { useGatewayStore } from '@/stores/gatewayStore';
+import { CopyButton } from '@/components/common/CopyButton';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import type { GatewayKey } from '@/types';
 
 const { Text } = Typography;
 
 export function GatewayKeys() {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { keys, loading, fetchKeys, createKey, deleteKey, toggleKey, decryptKey } =
     useGatewayStore();
+  const { copy: copyCreatedKey, isCopied: createdKeyCopied } = useCopyToClipboard();
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [keyName, setKeyName] = useState('');
@@ -57,12 +61,6 @@ export function GatewayKeys() {
     }
   };
 
-  const handleCopyKey = async () => {
-    if (createdKey) {
-      await clipboardWriteText(createdKey);
-      message.success(t('common.copySuccess'));
-    }
-  };
 
   const handleCloseModal = () => {
     setCreateModalOpen(false);
@@ -114,19 +112,11 @@ export function GatewayKeys() {
       render: (_: unknown, record: GatewayKey) => (
         <div style={{ display: 'flex', gap: 4 }}>
           {record.has_encrypted_key && (
-            <Button
-              type="text"
-              icon={<Copy size={14} />}
-              size="small"
-              onClick={async () => {
-                try {
-                  const plainKey = await decryptKey(record.id);
-                  await clipboardWriteText(plainKey);
-                  message.success(t('common.copySuccess'));
-                } catch (e) {
-                  message.error(String(e));
-                }
-              }}
+            <CopyButton
+              text={async () => decryptKey(record.id)}
+              size={14}
+              successMessage={t('common.copySuccess')}
+              onError={(e) => message.error(String(e))}
             />
           )}
           <Popconfirm
@@ -176,7 +166,12 @@ export function GatewayKeys() {
         footer={
           createdKey
             ? [
-                <Button key="copy" icon={<Copy size={16} />} onClick={handleCopyKey}>
+                <Button key="copy" icon={createdKeyCopied ? <Check size={16} style={{ color: token.colorSuccess }} /> : <Copy size={16} />} onClick={async () => {
+                  if (createdKey) {
+                    const ok = await copyCreatedKey(createdKey);
+                    if (ok) message.success(t('common.copySuccess'));
+                  }
+                }}>
                   {t('gateway.copyKey')}
                 </Button>,
                 <Button key="close" type="primary" onClick={handleCloseModal}>

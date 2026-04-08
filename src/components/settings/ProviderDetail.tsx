@@ -23,13 +23,12 @@ import {
   App,
   theme,
 } from 'antd';
-import { Maximize2, Mic, Lightbulb, Copy, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown, Expand, Shrink, SquarePen } from 'lucide-react';
+import { Maximize2, Mic, Lightbulb, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown, Expand, Shrink, SquarePen } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import { writeText as clipboardWriteText } from '@tauri-apps/plugin-clipboard-manager';
 import { useProviderStore, useUIStore } from '@/stores';
 import { SmartProviderIcon } from '@/lib/providerIcons';
 import { getEditableCapabilities, getVisibleModelCapabilities, sanitizeModelCapabilities } from '@/lib/modelCapabilities';
@@ -37,6 +36,7 @@ import { IconEditor } from '@/components/shared/IconEditor';
 import { DynamicLobeIcon } from '@/components/shared/DynamicLobeIcon';
 import type { Model, ModelCapability, ModelType, ModelParamOverrides, ProviderType } from '@/types';
 import { ModelParamSliders } from '@/components/common/ModelParamSliders';
+import { CopyButton } from '@/components/common/CopyButton';
 
 const { Text, Title } = Typography;
 
@@ -739,21 +739,17 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                   <Text code>{key.key_prefix}••••••••</Text>
                 </Space>
                 <Space size="small">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<Copy size={14} />}
-                    onClick={async () => {
-                      try {
-                        const raw = await invoke<string>('get_decrypted_provider_key', { keyId: key.id });
-                        await clipboardWriteText(raw);
-                        message.success(t('common.copySuccess'));
-                      } catch (e) {
-                        console.error('copy key failed:', e);
-                        message.error(t('error.unknown'));
-                      }
+                  <CopyButton
+                    text={async () => {
+                      const raw = await invoke<string>('get_decrypted_provider_key', { keyId: key.id });
+                      return raw;
                     }}
-                    title={t('common.copy')}
+                    size={14}
+                    successMessage={t('common.copySuccess')}
+                    onError={(e) => {
+                      console.error('copy key failed:', e);
+                      message.error(t('error.unknown'));
+                    }}
                   />
                   <Button
                     type="text"
@@ -1345,15 +1341,11 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 {editingModel.name && (
                   <span className="text-xs shrink-0" style={{ color: token.colorTextSecondary }}>({editingModel.model_id})</span>
                 )}
-                <Button
-                  type="text"
-                  size="small"
+                <CopyButton
+                  text={editingModel.model_id}
+                  size={12}
+                  successMessage={t('common.copySuccess')}
                   className="shrink-0"
-                  icon={<Copy size={12} />}
-                  onClick={() => {
-                    navigator.clipboard.writeText(editingModel.model_id);
-                    message.success(t('common.copySuccess'));
-                  }}
                 />
               </div>
             </div>

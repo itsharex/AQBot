@@ -1,10 +1,12 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Popconfirm, Tag, Tooltip, Typography, theme } from 'antd';
-import { Check, Columns2, Copy, LayoutList, Rows3, Trash2 } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { Alert, Button, Popconfirm, Tag, Tooltip, Typography, theme } from 'antd';
+import { Check, Columns2, LayoutList, Rows3, Trash2 } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useTranslation } from 'react-i18next';
 import { OverlayScrollbars } from 'overlayscrollbars';
 import type { Message } from '@/types';
+import { CopyButton } from '@/components/common/CopyButton';
+import { stripAqbotTags } from '@/lib/chatMarkdown';
 
 export type MultiModelDisplayMode = 'tabs' | 'side-by-side' | 'stacked';
 
@@ -37,7 +39,6 @@ export interface MultiModelDisplayProps {
   conversationId: string;
   onSwitchVersion: (parentMessageId: string, messageId: string) => void;
   onDeleteVersion?: (messageId: string) => void;
-  onCopyContent?: (content: string) => void;
   renderContent: (msg: Message, isVersionStreaming: boolean) => React.ReactNode;
   getModelDisplayInfo: (
     modelId?: string | null,
@@ -57,7 +58,6 @@ export const MultiModelDisplay = React.memo(function MultiModelDisplay({
   mode,
   onSwitchVersion,
   onDeleteVersion,
-  onCopyContent,
   renderContent,
   getModelDisplayInfo,
   streamingMessageId,
@@ -76,7 +76,6 @@ export const MultiModelDisplay = React.memo(function MultiModelDisplay({
         mode={mode}
         onSwitchVersion={onSwitchVersion}
         onDeleteVersion={onDeleteVersion}
-        onCopyContent={onCopyContent}
         renderContent={renderContent}
         getModelDisplayInfo={getModelDisplayInfo}
         streamingMessageId={streamingMessageId}
@@ -98,7 +97,6 @@ function MultiModelDisplayInner({
   mode,
   onSwitchVersion,
   onDeleteVersion,
-  onCopyContent,
   renderContent,
   getModelDisplayInfo,
   streamingMessageId,
@@ -118,8 +116,6 @@ function MultiModelDisplayInner({
   }, [versions]);
 
   const parentMessageId = versions[0]?.parent_message_id;
-  // Track copy feedback: show checkmark for 1.5s after copy
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   if (latestByModel.length <= 1) {
     const msg = latestByModel[0];
@@ -268,20 +264,11 @@ function MultiModelDisplayInner({
               </div>
               {/* Card action buttons */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                {/* Copy button with feedback */}
-                {onCopyContent && (
-                  <CardActionButton
-                    token={token}
-                    onClick={() => {
-                      onCopyContent(vMsg.content);
-                      setCopiedId(vMsg.id);
-                      setTimeout(() => setCopiedId((prev) => prev === vMsg.id ? null : prev), 3000);
-                    }}
-                    forceColor={copiedId === vMsg.id ? token.colorSuccess : undefined}
-                  >
-                    {copiedId === vMsg.id ? <Check size={13} /> : <Copy size={13} />}
-                  </CardActionButton>
-                )}
+                <CopyButton
+                  text={() => stripAqbotTags(vMsg.content ?? '')}
+                  size={13}
+                  timeout={3000}
+                />
                 {/* Delete button with confirmation */}
                 {onDeleteVersion && latestByModel.length > 1 && (
                   <Popconfirm
@@ -290,9 +277,7 @@ function MultiModelDisplayInner({
                     okText={t('common.confirm')}
                     cancelText={t('common.cancel')}
                   >
-                    <CardActionButton token={token}>
-                      <Trash2 size={13} />
-                    </CardActionButton>
+                    <Button type="text" size="small" danger icon={<Trash2 size={13} />} />
                   </Popconfirm>
                 )}
                 {/* Use as context button */}
@@ -331,35 +316,6 @@ function MultiModelDisplayInner({
   );
 }
 
-/** Small icon button with hover effect for card header actions */
-const CardActionButton = React.forwardRef<
-  HTMLDivElement,
-  { token: ReturnType<typeof theme.useToken>['token']; onClick?: () => void; forceColor?: string; children: React.ReactNode }
->(function CardActionButton({ token, onClick, forceColor, children }, ref) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      ref={ref}
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 24,
-        height: 24,
-        borderRadius: token.borderRadiusSM,
-        cursor: 'pointer',
-        color: forceColor ?? (hovered ? token.colorText : token.colorTextQuaternary),
-        backgroundColor: hovered ? token.colorFillSecondary : 'transparent',
-        transition: 'all 0.2s',
-      }}
-    >
-      {children}
-    </div>
-  );
-});
 
 /**
  * Layout switcher row — rendered below ModelTags.

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Tag, Statistic, Row, Col, Empty, Table, theme, message } from 'antd';
-import { PlayCircle, Power, Router, Copy, Check, ArrowDown, ArrowUp, RefreshCw } from 'lucide-react';
+import { PlayCircle, Power, Router, ArrowDown, ArrowUp, RefreshCw } from 'lucide-react';
 import { useGatewayStore } from '@/stores/gatewayStore';
 import type { GatewayRequestLog } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 import { formatTokenCount } from './tokenFormat';
+import { CopyButton } from '@/components/common/CopyButton';
 
 interface GatewayOverviewProps {
   onViewMoreLogs?: () => void;
@@ -62,7 +63,6 @@ export function GatewayOverview({ onViewMoreLogs }: GatewayOverviewProps) {
     return () => clearInterval(interval);
   }, [loadRecentLogs, status.is_running]);
 
-  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const gatewayHost =
     status.listen_address === '0.0.0.0'
       ? '127.0.0.1'
@@ -166,17 +166,6 @@ export function GatewayOverview({ onViewMoreLogs }: GatewayOverviewProps) {
     }
   };
 
-  const handleCopyUrl = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedUrl(url);
-      message.success(t('gateway.copySuccess'));
-      setTimeout(() => setCopiedUrl(null), 2000);
-    } catch {
-      message.error('Copy failed');
-    }
-  };
-
   const handleOpenUrl = async (url: string) => {
     try {
       const { openUrl } = await import('@tauri-apps/plugin-opener');
@@ -222,20 +211,11 @@ export function GatewayOverview({ onViewMoreLogs }: GatewayOverviewProps) {
                     >
                       {httpUrl}
                     </a>
-                    <button
-                      onClick={() => handleCopyUrl(httpUrl)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        padding: 2,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        color: copiedUrl === httpUrl ? token.colorSuccess : token.colorTextSecondary,
-                      }}
-                    >
-                      {copiedUrl === httpUrl ? <Check size={12} /> : <Copy size={12} />}
-                    </button>
+                    <CopyButton
+                      text={httpUrl}
+                      size={12}
+                      successMessage={t('gateway.copySuccess')}
+                    />
                   </div>
                   {status.ssl_enabled && httpsUrl && (
                     <div className="flex items-center gap-1">
@@ -252,20 +232,11 @@ export function GatewayOverview({ onViewMoreLogs }: GatewayOverviewProps) {
                       >
                         {httpsUrl}
                       </a>
-                      <button
-                        onClick={() => handleCopyUrl(httpsUrl)}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          padding: 2,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          color: copiedUrl === httpsUrl ? token.colorSuccess : token.colorTextSecondary,
-                        }}
-                      >
-                        {copiedUrl === httpsUrl ? <Check size={12} /> : <Copy size={12} />}
-                      </button>
+                      <CopyButton
+                        text={httpsUrl}
+                        size={12}
+                        successMessage={t('gateway.copySuccess')}
+                      />
                     </div>
                   )}
                   {status.ssl_enabled && status.force_ssl && (

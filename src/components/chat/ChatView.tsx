@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { CloseCircleFilled, SyncOutlined } from '@ant-design/icons';
 import { Typography, Button, Dropdown, Input, App, Avatar, Alert, Popconfirm, Popover, theme, Tag, Image, Tooltip, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
-import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap, Sparkles, TextCursorInput, GitBranch, ChartNoAxesColumn, MessageSquare, ArrowUpRight, ArrowDownRight, Coins, Clock, Timer } from 'lucide-react';
+import { Pencil, Share2, FileImage, FileCode, FileText, FileType, Bot, Brain, Lightbulb, Code, Languages, Copy, Check, RotateCcw, User, Trash2, ChevronLeft, ChevronRight, ChevronDown, Scissors, Paperclip, AlertCircle, X, ArrowDown, ArrowUp, ArrowLeftRight, Zap, Sparkles, TextCursorInput, GitBranch, ChartNoAxesColumn, MessageSquare, ArrowUpRight, ArrowDownRight, Coins, Clock, Timer } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { getConvIcon } from '@/lib/convIcon';
 import Bubble from '@ant-design/x/es/bubble';
@@ -28,6 +28,7 @@ import { McpContainerNode } from './McpContainerNode';
 import { getDistanceToHistoryTop, shouldShowScrollToBottom } from './chatScroll';
 import { formatTokenCount, formatSpeed, formatDuration } from '../gateway/tokenFormat';
 import { getStreamingLoadingState } from './chatStreaming';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { buildAssistantDisplayContent, shouldHideAssistantBubble } from './toolCallDisplay';
 import { ChatScrollIndicator } from './ChatScrollIndicator';
 import { ChatMinimap, MinimapScrollProvider } from './ChatMinimap';
@@ -504,7 +505,7 @@ function ChatD2BlockNode({
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [showSource, setShowSource] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copy: copyD2, isCopied: d2Copied } = useCopyToClipboard({ timeout: 1000 });
   const [svgMarkup, setSvgMarkup] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [canRenderPreview, setCanRenderPreview] = useState(false);
@@ -652,15 +653,6 @@ function ChatD2BlockNode({
     };
   }, [canRenderPreview, isDark, node.code, showSource, token.colorBgContainer, token.colorBgElevated, token.colorBorder, token.colorBorderSecondary, token.colorText, token.colorTextQuaternary, token.colorTextSecondary, token.colorTextTertiary]);
 
-  const handleCopy = useCallback(async () => {
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(node.code);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1000);
-  }, [node.code]);
 
   const handleExport = useCallback(() => {
     if (!svgMarkup) return;
@@ -714,8 +706,8 @@ function ChatD2BlockNode({
               {t('common.source')}
             </button>
           </div>
-          <button type="button" className="d2-action-btn p-2 text-xs rounded-md transition-colors hover:bg-[var(--vscode-editor-selectionBackground)]" aria-label={copied ? 'Copied' : 'Copy'} onClick={() => void handleCopy()}>
-            <Copy size={14} />
+          <button type="button" className="d2-action-btn p-2 text-xs rounded-md transition-colors hover:bg-[var(--vscode-editor-selectionBackground)]" aria-label={d2Copied ? 'Copied' : 'Copy'} onClick={() => void copyD2(node.code)}>
+            {d2Copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
           {svgMarkup ? (
             <button type="button" className="d2-action-btn p-2 text-xs rounded-md transition-colors hover:bg-[var(--vscode-editor-selectionBackground)]" aria-label="Export" onClick={handleExport}>
@@ -1366,6 +1358,7 @@ function AssistantFooter({
   const deleteMessageGroup = useConversationStore((s) => s.deleteMessageGroup);
   const switchMessageVersion = useConversationStore((s) => s.switchMessageVersion);
   const branchConversation = useConversationStore((s) => s.branchConversation);
+  const { copy: copyAssistant, isCopied: assistantCopied } = useCopyToClipboard();
   // Branch modal state
   const [branchModalOpen, setBranchModalOpen] = useState(false);
   const [branchAsChild, setBranchAsChild] = useState(false);
@@ -1469,12 +1462,12 @@ function AssistantFooter({
           items={[
             {
               key: 'copy',
-              icon: <Copy size={14} />,
+              icon: assistantCopied ? <Check size={14} style={{ color: token.colorSuccess }} /> : <Copy size={14} />,
               label: t('chat.copy'),
               onItemClick: () => {
-                navigator.clipboard
-                  .writeText(assistantCopyText)
-                  .then(() => messageApi.success(t('chat.copied')));
+                void copyAssistant(assistantCopyText).then(ok => {
+                  if (ok) messageApi.success(t('chat.copied'));
+                });
               },
             },
             {
@@ -1789,6 +1782,7 @@ export function ChatView() {
   const profile = useUserProfileStore((s) => s.profile);
   const resolvedAvatarSrc = useResolvedAvatarSrc(profile.avatarType, profile.avatarValue);
   const isDarkMode = useResolvedDarkMode(settings.theme_mode);
+  const { copy: copyMessage, isCopiedFor: isUserMsgCopied } = useCopyToClipboard();
   const { darkTheme: codeBlockDarkTheme, themes: codeBlockThemes } = useMemo(
     () => getChatCodeThemes(settings.code_theme),
     [settings.code_theme],
@@ -2476,12 +2470,12 @@ export function ChatView() {
           items={[
             {
               key: 'copy',
-              icon: <Copy size={14} />,
+              icon: (() => { const ct = stripAqbotTags(String(bubbleData.content ?? '')); return isUserMsgCopied(ct) ? <Check size={14} style={{ color: token.colorSuccess }} /> : <Copy size={14} />; })(),
               label: t('chat.copy'),
               onItemClick: () => {
-                navigator.clipboard
-                  .writeText(stripAqbotTags(String(bubbleData.content ?? '')))
-                  .then(() => messageApi.success(t('chat.copied')));
+                void copyMessage(stripAqbotTags(String(bubbleData.content ?? ''))).then(ok => {
+                  if (ok) messageApi.success(t('chat.copied'));
+                });
               },
             },
             {
@@ -2594,10 +2588,6 @@ export function ChatView() {
                 conversationId={activeConversationId}
                 onSwitchVersion={(pid, mid) => switchMessageVersion(activeConversationId, pid, mid)}
                 onDeleteVersion={(mid) => deleteMessage(mid)}
-                onCopyContent={(content) => {
-                  const text = stripAqbotTags(content);
-                  navigator.clipboard.writeText(text).catch(() => {});
-                }}
                 streamingMessageId={streamingMessageId}
                 multiModelDoneMessageIds={multiModelDoneMessageIds}
                 getModelDisplayInfo={getModelDisplayInfo}
