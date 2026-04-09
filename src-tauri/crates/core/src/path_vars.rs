@@ -129,8 +129,77 @@ fn platform_sep(s: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// Database migration for hardcoded paths
 // ---------------------------------------------------------------------------
+
+/// Settings keys that store filesystem paths.
+const PATH_SETTING_KEYS: &[&str] = &[
+    "backup_dir",
+    "gateway_ssl_cert_path",
+    "gateway_ssl_key_path",
+];
+
+/// Migrate hardcoded absolute paths in settings to use dynamic variables.
+/// Called once at startup.  Only touches values that look like absolute paths
+/// and do NOT already contain a `{{…}}` variable.
+pub async fn migrate_hardcoded_paths(db: &sea_orm::DatabaseConnection) {
+    for &key in PATH_SETTING_KEYS {
+        match crate::repo::settings::get_setting(db, key).await {
+            Ok(Some(value)) if !value.is_empty() && !value.contains("{{") => {
+                let encoded = encode_path(&value);
+                if encoded != value {
+                    if let Err(e) = crate::repo::settings::set_setting(db, key, &encoded).await {
+                        tracing::warn!(
+                            "path_vars: failed to migrate setting '{}': {}",
+                            key,
+                            e
+                        );
+                    } else {
+                        tracing::info!(
+                            "path_vars: migrated '{}': {} → {}",
+                            key,
+                            value,
+                            encoded
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Also migrate backup_manifests.file_path entries
+    migrate_backup_manifest_paths(db).await;
+}
+
+/// Migrate hardcoded file_path values in backup_manifests table.
+async fn migrate_backup_manifest_paths(db: &sea_orm::DatabaseConnection) {
+    use crate::entity::backup_manifests;
+    use sea_orm::*;
+
+    let manifests = match backup_manifests::Entity::find().all(db).await {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+
+    for m in manifests {
+        if let Some(ref fp) = m.file_path {
+            if !fp.is_empty() && !fp.contains("{{") {
+                let encoded = encode_path(fp);
+                if encoded != *fp {
+                    let mut am: backup_manifests::ActiveModel = m.into();
+                    am.file_path = Set(Some(encoded));
+                    if let Err(e) = am.update(db).await {
+                        tracing::warn!(
+                            "path_vars: failed to migrate backup manifest path: {}",
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

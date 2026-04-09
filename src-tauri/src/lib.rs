@@ -408,6 +408,9 @@ pub fn run() {
             let vector_store =
                 aqbot_core::vector_store::VectorStore::new(db_handle.conn.clone());
 
+            // Migrate any hardcoded absolute paths in settings to dynamic variables
+            rt.block_on(aqbot_core::path_vars::migrate_hardcoded_paths(&db_handle.conn));
+
             let tray_language = rt
                 .block_on(aqbot_core::repo::settings::get_settings(&db_handle.conn))
                 .map(|settings| settings.language)
