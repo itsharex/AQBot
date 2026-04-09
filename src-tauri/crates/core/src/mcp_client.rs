@@ -8,6 +8,7 @@ use rmcp::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Result of a tool call via MCP.
 #[derive(Debug, Clone)]
@@ -22,6 +23,47 @@ pub struct DiscoveredTool {
     pub name: String,
     pub description: Option<String>,
     pub input_schema: Option<Value>,
+}
+
+/// Resolve the user's login shell PATH so that GUI-launched apps can find
+/// tools like `npx`, `node`, `python`, etc. that are installed via version
+/// managers (nvm, fnm, volta, pyenv, …).
+///
+/// On macOS/Linux GUI apps inherit a minimal PATH (`/usr/bin:/bin:…`).
+/// This function runs the user's login shell once and caches the full PATH.
+fn get_shell_path() -> &'static str {
+    static SHELL_PATH: OnceLock<String> = OnceLock::new();
+    SHELL_PATH.get_or_init(|| resolve_login_shell_path().unwrap_or_default())
+}
+
+#[cfg(unix)]
+fn resolve_login_shell_path() -> Option<String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let output = std::process::Command::new(&shell)
+        .args(["-l", "-c", "echo $PATH"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    let path = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    if path.is_empty() { None } else { Some(path) }
+}
+
+#[cfg(not(unix))]
+fn resolve_login_shell_path() -> Option<String> {
+    std::env::var("PATH").ok()
+}
+
+/// Inject login-shell PATH into the command unless the user already
+/// provides an explicit PATH in their custom environment variables.
+fn configure_stdio_env(cmd: &mut tokio::process::Command, env: &HashMap<String, String>) {
+    let shell_path = get_shell_path();
+    if !shell_path.is_empty() && !env.contains_key("PATH") {
+        cmd.env("PATH", shell_path);
+    }
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
 }
 
 /// Convert rmcp Tool to our DiscoveredTool.
@@ -74,9 +116,7 @@ pub async fn call_tool_stdio(
     let transport =
         TokioChildProcess::new(tokio::process::Command::new(command).configure(move |cmd| {
             cmd.args(&args_clone);
-            for (k, v) in &env_clone {
-                cmd.env(k, v);
-            }
+            configure_stdio_env(cmd, &env_clone);
         }))
         .map_err(|e| {
             AQBotError::Gateway(format!("Failed to spawn MCP server '{}': {}", command, e))
@@ -112,9 +152,7 @@ pub async fn discover_tools_stdio(
     let transport =
         TokioChildProcess::new(tokio::process::Command::new(command).configure(move |cmd| {
             cmd.args(&args_clone);
-            for (k, v) in &env_clone {
-                cmd.env(k, v);
-            }
+            configure_stdio_env(cmd, &env_clone);
         }))
         .map_err(|e| {
             AQBotError::Gateway(format!("Failed to spawn MCP server '{}': {}", command, e))
