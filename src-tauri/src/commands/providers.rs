@@ -299,6 +299,7 @@ pub async fn test_model(
         tools: None,
         thinking_budget: None,
         use_max_completion_tokens: None,
+        thinking_param_style: None,
     };
     let start = Instant::now();
     adapter

@@ -550,6 +550,8 @@
     "useMaxCompletionTokens": "max_completion_tokens verwenden",
     "noSystemRole": "Keine Systemrollenunterstützung",
     "forceMaxTokens": "Maximale Token erzwingen",
+    "thinkingParamStyle": "Denkparameter-Stil",
+    "thinkingParamStyleNone": "Nicht senden (none)",
     "defaultProvider": "Standard-Anbieter",
     "selectProvider": "← Anbieter auswählen",
     "noProviders": "Keine Anbieter",

@@ -550,6 +550,8 @@
     "useMaxCompletionTokens": "使用 max_completion_tokens",
     "noSystemRole": "不支援 System 角色",
     "forceMaxTokens": "強制 Max Tokens",
+    "thinkingParamStyle": "思維參數風格",
+    "thinkingParamStyleNone": "不發送（none）",
     "defaultProvider": "預設供應商",
     "selectProvider": "← 請選擇一個供應商",
     "noProviders": "暫無供應商",

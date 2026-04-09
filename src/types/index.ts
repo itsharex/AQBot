@@ -80,6 +80,7 @@ export interface ModelParamOverrides {
   use_max_completion_tokens?: boolean;
   no_system_role?: boolean;
   force_max_tokens?: boolean;
+  thinking_param_style?: string;
 }
 
 // === Conversation & Message ===

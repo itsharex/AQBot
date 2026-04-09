@@ -550,6 +550,8 @@
     "useMaxCompletionTokens": "max_completion_tokensを使用",
     "noSystemRole": "システムロール非対応",
     "forceMaxTokens": "最大トークン数を強制",
+    "thinkingParamStyle": "思考パラメータスタイル",
+    "thinkingParamStyleNone": "送信しない（none）",
     "defaultProvider": "デフォルトプロバイダー",
     "selectProvider": "← プロバイダーを選択",
     "noProviders": "プロバイダーなし",

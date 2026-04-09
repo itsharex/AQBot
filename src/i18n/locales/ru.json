@@ -550,6 +550,8 @@
     "useMaxCompletionTokens": "Использовать max_completion_tokens",
     "noSystemRole": "Без поддержки системной роли",
     "forceMaxTokens": "Принудительные макс. токены",
+    "thinkingParamStyle": "Стиль параметра мышления",
+    "thinkingParamStyleNone": "Не отправлять (none)",
     "defaultProvider": "Провайдер по умолчанию",
     "selectProvider": "← Выберите провайдера",
     "noProviders": "Нет провайдеров",

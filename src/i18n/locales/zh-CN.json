@@ -550,6 +550,8 @@
     "useMaxCompletionTokens": "使用 max_completion_tokens",
     "noSystemRole": "不支持 System 角色",
     "forceMaxTokens": "强制 Max Tokens",
+    "thinkingParamStyle": "思维参数风格",
+    "thinkingParamStyleNone": "不发送（none）",
     "defaultProvider": "默认服务商",
     "selectProvider": "← 请选择一个服务商",
     "noProviders": "暂无服务商",

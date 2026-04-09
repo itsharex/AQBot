@@ -950,6 +950,7 @@ async fn generate_ai_title_with(
         tools: None,
         thinking_budget: None,
         use_max_completion_tokens,
+        thinking_param_style: None,
     };
 
     let registry = ProviderRegistry::create_default();
@@ -1184,6 +1185,7 @@ fn spawn_stream_task(
     override_created_at: Option<i64>,
     use_max_completion_tokens: Option<bool>,
     force_max_tokens: Option<bool>,
+    thinking_param_style: Option<String>,
     settings: AppSettings,
     master_key: [u8; 32],
     cancel_flag: Arc<AtomicBool>,
@@ -1289,6 +1291,7 @@ fn spawn_stream_task(
                 tools: tools.clone(),
                 thinking_budget,
                 use_max_completion_tokens,
+                thinking_param_style: thinking_param_style.clone(),
             };
 
             let mut stream = adapter.chat_stream(&ctx, request);
@@ -1731,6 +1734,9 @@ pub async fn send_message(
     let force_max_tokens = model_param_overrides
         .as_ref()
         .and_then(|p| p.force_max_tokens);
+    let thinking_param_style = model_param_overrides
+        .as_ref()
+        .and_then(|p| p.thinking_param_style.clone());
 
     // 4. Build ChatRequest from conversation messages
     let db_messages = aqbot_core::repo::message::list_messages(&state.sea_db, &conversation_id)
@@ -2011,6 +2017,7 @@ pub async fn send_message(
         Some(user_message.created_at + 1),
         use_max_completion_tokens,
         force_max_tokens,
+        thinking_param_style,
         global_settings,
         state.master_key,
         cancel_flag,
@@ -2281,6 +2288,9 @@ pub async fn regenerate_message(
         .as_ref()
         .and_then(|p| p.no_system_role)
         .unwrap_or(false);
+    let thinking_param_style = regen_model_overrides
+        .as_ref()
+        .and_then(|p| p.thinking_param_style.clone());
 
     // Convert system messages to user messages if model doesn't support system role
     if no_system_role {
@@ -2316,6 +2326,7 @@ pub async fn regenerate_message(
         original_created_at,
         use_max_completion_tokens,
         force_max_tokens,
+        thinking_param_style,
         global_settings,
         state.master_key,
         cancel_flag,
@@ -2567,6 +2578,9 @@ pub async fn regenerate_with_model(
         .as_ref()
         .and_then(|p| p.no_system_role)
         .unwrap_or(false);
+    let thinking_param_style = rwm_overrides
+        .as_ref()
+        .and_then(|p| p.thinking_param_style.clone());
 
     if no_system_role {
         for msg in &mut chat_messages {
@@ -2643,6 +2657,7 @@ pub async fn regenerate_with_model(
         original_created_at,
         use_max_completion_tokens,
         force_max_tokens,
+        thinking_param_style,
         global_settings,
         state.master_key,
         cancel_flag,
@@ -2804,6 +2819,7 @@ async fn do_compress(
         tools: None,
         thinking_budget: None,
         use_max_completion_tokens: comp_use_max,
+        thinking_param_style: None,
     };
 
     let ctx = ProviderRequestContext {

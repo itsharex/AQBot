@@ -205,6 +205,9 @@ pub struct ModelParamOverrides {
     /// When true, always include max_tokens in the request
     /// (falls back to 4096 if conversation.max_tokens is not set).
     pub force_max_tokens: Option<bool>,
+    /// Thinking parameter format for the provider API.
+    /// "reasoning_effort" (default/OpenAI) or "enable_thinking" (SiliconFlow).
+    pub thinking_param_style: Option<String>,
 }
 
 // === Conversation & Message ===
@@ -720,6 +723,9 @@ pub struct ChatRequest {
     /// When true, send `max_completion_tokens` instead of `max_tokens` (OpenAI o-series).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_max_completion_tokens: Option<bool>,
+    /// Thinking parameter format: "reasoning_effort" (default) or "enable_thinking" (SiliconFlow).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_param_style: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

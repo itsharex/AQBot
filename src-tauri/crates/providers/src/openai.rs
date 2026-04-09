@@ -64,6 +64,12 @@ struct OpenAIRequest {
     tools: Option<Vec<ChatTool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
+    /// SiliconFlow-style thinking toggle
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enable_thinking: Option<bool>,
+    /// SiliconFlow-style thinking token budget
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking_budget: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -302,18 +308,39 @@ fn convert_messages(messages: &[ChatMessage]) -> Vec<OpenAIMessage> {
 }
 
 fn build_request(request: &ChatRequest, messages: &[ChatMessage], stream: bool) -> OpenAIRequest {
-    let reasoning_effort = request.thinking_budget.map(|b| match b {
-        0 => "none".to_string(),
-        1..=2048 => "low".to_string(),
-        2049..=6144 => "medium".to_string(),
-        6145..=12288 => "high".to_string(),
-        _ => "xhigh".to_string(),
-    });
+    let thinking_style = request.thinking_param_style.as_deref().unwrap_or("reasoning_effort");
+
+    // "none" style: never send any thinking-related params
+    // "enable_thinking" style (SiliconFlow): enable_thinking + thinking_budget fields
+    let (enable_thinking, sf_thinking_budget) = if thinking_style == "enable_thinking" {
+        match request.thinking_budget {
+            Some(0) => (Some(false), None),
+            Some(b) => (Some(true), Some(b.max(128))),
+            None => (None, None),
+        }
+    } else {
+        (None, None)
+    };
+
+    // "reasoning_effort" style (OpenAI): reasoning_effort field
+    let reasoning_effort = if thinking_style == "reasoning_effort" {
+        request.thinking_budget.map(|b| match b {
+            0 => "none".to_string(),
+            1..=2048 => "low".to_string(),
+            2049..=6144 => "medium".to_string(),
+            6145..=12288 => "high".to_string(),
+            _ => "xhigh".to_string(),
+        })
+    } else {
+        None
+    };
+
+    let has_thinking = reasoning_effort.is_some() || enable_thinking == Some(true);
 
     // Use max_completion_tokens when: model config says so, reasoning mode,
     // o-series models, or gpt-5+ (which deprecate max_tokens)
     let use_completion_tokens = request.use_max_completion_tokens == Some(true)
-        || reasoning_effort.is_some()
+        || has_thinking
         || request.model.starts_with("o1")
         || request.model.starts_with("o3")
         || request.model.starts_with("o4")
@@ -328,16 +355,8 @@ fn build_request(request: &ChatRequest, messages: &[ChatMessage], stream: bool) 
     OpenAIRequest {
         model: request.model.clone(),
         messages: convert_messages(messages),
-        temperature: if reasoning_effort.is_some() {
-            None
-        } else {
-            request.temperature
-        },
-        top_p: if reasoning_effort.is_some() {
-            None
-        } else {
-            request.top_p
-        },
+        temperature: if has_thinking { None } else { request.temperature },
+        top_p: if has_thinking { None } else { request.top_p },
         max_tokens,
         max_completion_tokens,
         stream,
@@ -350,6 +369,8 @@ fn build_request(request: &ChatRequest, messages: &[ChatMessage], stream: bool) 
         },
         tools: request.tools.clone(),
         reasoning_effort,
+        enable_thinking,
+        thinking_budget: sf_thinking_budget,
     }
 }
 

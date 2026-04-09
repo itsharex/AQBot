@@ -550,6 +550,8 @@
     "useMaxCompletionTokens": "استخدام max_completion_tokens",
     "noSystemRole": "لا يدعم دور النظام",
     "forceMaxTokens": "إجبار الحد الأقصى للرموز",
+    "thinkingParamStyle": "نمط معلمة التفكير",
+    "thinkingParamStyleNone": "عدم الإرسال (none)",
     "defaultProvider": "المزوّد الافتراضي",
     "selectProvider": "← اختر مزوّداً",
     "noProviders": "لا يوجد مزوّدون",

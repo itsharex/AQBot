@@ -183,6 +183,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const [editUseMaxCompletionTokens, setEditUseMaxCompletionTokens] = useState(false);
   const [editNoSystemRole, setEditNoSystemRole] = useState(false);
   const [editForceMaxTokens, setEditForceMaxTokens] = useState(false);
+  const [editThinkingParamStyle, setEditThinkingParamStyle] = useState<string>('reasoning_effort');
   const [iconOverrides, setIconOverrides] = useState<Record<string, string>>({});
   const [apiHostLocal, setApiHostLocal] = useState(provider?.api_host ?? '');
   const [apiPathLocal, setApiPathLocal] = useState(provider?.api_path ?? '');
@@ -516,6 +517,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       setEditUseMaxCompletionTokens(model.param_overrides?.use_max_completion_tokens ?? false);
       setEditNoSystemRole(model.param_overrides?.no_system_role ?? false);
       setEditForceMaxTokens(model.param_overrides?.force_max_tokens ?? false);
+      setEditThinkingParamStyle(model.param_overrides?.thinking_param_style ?? 'reasoning_effort');
       setSettingsModalOpen(true);
     },
     [],
@@ -531,6 +533,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
       use_max_completion_tokens: editUseMaxCompletionTokens,
       no_system_role: editNoSystemRole,
       force_max_tokens: editForceMaxTokens,
+      thinking_param_style: editThinkingParamStyle === 'reasoning_effort' ? undefined : editThinkingParamStyle,
     };
     const nextCapabilities = sanitizeModelCapabilities(editModelType, editCapabilities);
     try {
@@ -547,7 +550,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     } catch {
       message.error(t('error.saveFailed'));
     }
-  }, [editingModel, editCapabilities, editModelType, editMaxTokens, editTemperature, editMaxTokensParam, editTopP, editFreqPenalty, editUseMaxCompletionTokens, editNoSystemRole, editForceMaxTokens, providerId, updateModelParams, saveModels, provider?.models, message, t]);
+  }, [editingModel, editCapabilities, editModelType, editMaxTokens, editTemperature, editMaxTokensParam, editTopP, editFreqPenalty, editUseMaxCompletionTokens, editNoSystemRole, editForceMaxTokens, editThinkingParamStyle, providerId, updateModelParams, saveModels, provider?.models, message, t]);
 
   const handleApiHostChange = useCallback(
     (value: string) => {
@@ -1467,6 +1470,20 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                 <div className="flex items-center justify-between">
                   <span className="text-sm" style={{ color: token.colorText }}>{t('settings.forceMaxTokens')}</span>
                   <Switch size="small" checked={editForceMaxTokens} onChange={setEditForceMaxTokens} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: token.colorText }}>{t('settings.thinkingParamStyle')}</span>
+                  <Select
+                    size="small"
+                    style={{ width: 180 }}
+                    value={editThinkingParamStyle}
+                    onChange={setEditThinkingParamStyle}
+                    options={[
+                      { value: 'reasoning_effort', label: 'reasoning_effort (OpenAI)' },
+                      { value: 'enable_thinking', label: 'enable_thinking (SiliconFlow)' },
+                      { value: 'none', label: t('settings.thinkingParamStyleNone') },
+                    ]}
+                  />
                 </div>
               </div>
             </div>
