@@ -10,23 +10,23 @@
 
 | 对话图表渲染 | 服务商与模型 |
 |:---:|:---:|
-| ![](.github/images/s1.png) | ![](.github/images/s2.png) |
+| ![](.github/images/s1-0412.png) | ![](.github/images/s2-0412.png) |
 
 | 知识库 | 记忆 |
 |:---:|:---:|
-| ![](.github/images/s3.png) | ![](.github/images/s4.png) |
+| ![](.github/images/s3-0412.png) | ![](.github/images/s4-0412.png) |
 
 | Agent-询问 | API网关一键接入 |
 |:---:|:---:|
-| ![](.github/images/s5.png) | ![](.github/images/s6.png) |
+| ![](.github/images/s5-0412.png) | ![](.github/images/s6-0412.png) |
 
 | 对话模型选择 | 对话导航 |
 |:---:|:---:|
-| ![](.github/images/s7.png) | ![](.github/images/s8.png) |
+| ![](.github/images/s7-0412.png) | ![](.github/images/s8-0412.png) |
 
 | Agent-权限审批 | API网关概览 |
 |:---:|:---:|
-| ![](.github/images/s9.png) | ![](.github/images/s10.png) |
+| ![](.github/images/s9-0412.png) | ![](.github/images/s10-0412.png) |
 
 ## 功能特性
 

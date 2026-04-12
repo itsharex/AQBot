@@ -10,23 +10,23 @@
 
 | Chat Chart Rendering | Providers & Models |
 |:---:|:---:|
-| ![](.github/images/s1.png) | ![](.github/images/s2.png) |
+| ![](.github/images/s1-0412.png) | ![](.github/images/s2-0412.png) |
 
 | Knowledge Base | Memory |
 |:---:|:---:|
-| ![](.github/images/s3.png) | ![](.github/images/s4.png) |
+| ![](.github/images/s3-0412.png) | ![](.github/images/s4-0412.png) |
 
 | Agent - Ask User | API Gateway One-Click Access |
 |:---:|:---:|
-| ![](.github/images/s5.png) | ![](.github/images/s6.png) |
+| ![](.github/images/s5-0412.png) | ![](.github/images/s6-0412.png) |
 
 | Chat Model Selection | Chat Navigation |
 |:---:|:---:|
-| ![](.github/images/s7.png) | ![](.github/images/s8.png) |
+| ![](.github/images/s7-0412.png) | ![](.github/images/s8-0412.png) |
 
 | Agent - Permission Approval | API Gateway Overview |
 |:---:|:---:|
-| ![](.github/images/s9.png) | ![](.github/images/s10.png) |
+| ![](.github/images/s9-0412.png) | ![](.github/images/s10-0412.png) |
 
 ## Features
 

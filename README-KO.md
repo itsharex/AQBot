@@ -10,23 +10,23 @@
 
 | 대화 차트 렌더링 | 서비스 제공업체 및 모델 |
 |:---:|:---:|
-| ![](.github/images/s1.png) | ![](.github/images/s2.png) |
+| ![](.github/images/s1-0412.png) | ![](.github/images/s2-0412.png) |
 
 | 지식 베이스 | 메모리 |
 |:---:|:---:|
-| ![](.github/images/s3.png) | ![](.github/images/s4.png) |
+| ![](.github/images/s3-0412.png) | ![](.github/images/s4-0412.png) |
 
 | Agent - 질문 | API 게이트웨이 원클릭 접속 |
 |:---:|:---:|
-| ![](.github/images/s5.png) | ![](.github/images/s6.png) |
+| ![](.github/images/s5-0412.png) | ![](.github/images/s6-0412.png) |
 
 | 대화 모델 선택 | 대화 탐색 |
 |:---:|:---:|
-| ![](.github/images/s7.png) | ![](.github/images/s8.png) |
+| ![](.github/images/s7-0412.png) | ![](.github/images/s8-0412.png) |
 
 | Agent - 권한 승인 | API 게이트웨이 개요 |
 |:---:|:---:|
-| ![](.github/images/s9.png) | ![](.github/images/s10.png) |
+| ![](.github/images/s9-0412.png) | ![](.github/images/s10-0412.png) |
 
 ## 기능 목록
 
