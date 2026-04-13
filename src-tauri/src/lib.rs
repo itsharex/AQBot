@@ -48,27 +48,6 @@ pub fn run() {
         )
         .init();
 
-    // On Windows, verify that WebView2 Runtime is installed before proceeding.
-    // Without WebView2 the app window would start hidden and never become visible
-    // because the frontend JS (which calls `show()`) cannot load.
-    #[cfg(target_os = "windows")]
-    {
-        if !windows_utils::is_webview2_installed() {
-            tracing::error!("WebView2 Runtime not found — cannot start AQBot");
-            let user_ok = windows_utils::show_warning_ok_cancel(
-                "AQBot",
-                "未检测到 Microsoft Edge WebView2 Runtime，AQBot 无法启动。\n\n\
-                 点击「确定」打开下载页面进行安装，安装完成后重新启动 AQBot。",
-            );
-            if user_ok {
-                let _ = std::process::Command::new("cmd")
-                    .args(["/c", "start", "https://developer.microsoft.com/en-us/microsoft-edge/webview2/?form=MA13LH#download"])
-                    .spawn();
-            }
-            std::process::exit(1);
-        }
-    }
-
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -88,7 +67,7 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_mcp_bridge::init());
     }
 
-    builder
+    let build_result = builder
         .invoke_handler(tauri::generate_handler![
             // providers
             commands::providers::list_providers,
@@ -655,9 +634,41 @@ pub fn run() {
                 }
             }
         })
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(|app, event| {
+        .build(tauri::generate_context!());
+
+    let app = match build_result {
+        Ok(app) => app,
+        Err(e) => {
+            let error_msg = e.to_string();
+            tracing::error!("Failed to build Tauri application: {}", error_msg);
+
+            #[cfg(target_os = "windows")]
+            {
+                let lower = error_msg.to_lowercase();
+                if lower.contains("webview2") || lower.contains("webview") || lower.contains("edge") {
+                    let user_ok = windows_utils::show_warning_ok_cancel(
+                        "AQBot",
+                        "未检测到 Microsoft Edge WebView2 Runtime，AQBot 无法启动。\n\n\
+                         点击「确定」打开下载页面进行安装，安装完成后重新启动 AQBot。",
+                    );
+                    if user_ok {
+                        let _ = std::process::Command::new("cmd")
+                            .args(["/c", "start", "https://developer.microsoft.com/en-us/microsoft-edge/webview2/?form=MA13LH#download"])
+                            .spawn();
+                    }
+                } else {
+                    windows_utils::show_error_dialog(
+                        "AQBot",
+                        &format!("应用启动失败：{}", error_msg),
+                    );
+                }
+            }
+
+            std::process::exit(1);
+        }
+    };
+
+    app.run(|app, event| {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
                 if !has_visible_windows {
