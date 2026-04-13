@@ -31,7 +31,11 @@ import { WebSearchNode } from './WebSearchNode';
 import { MemoryRetrievalNode } from './MemoryRetrievalNode';
 import { KnowledgeRetrievalNode } from './KnowledgeRetrievalNode';
 import { McpContainerNode } from './McpContainerNode';
-import { getDistanceToHistoryTop, shouldShowScrollToBottom } from './chatScroll';
+import {
+  getDistanceToHistoryTop,
+  shouldKeepAutoScroll,
+  shouldShowScrollToBottom,
+} from './chatScroll';
 import { formatTokenCount, formatSpeed, formatDuration } from '../gateway/tokenFormat';
 import { getStreamingLoadingState } from './chatStreaming';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
@@ -1982,6 +1986,7 @@ export function ChatView() {
   // ── Title editing state ────────────────────────────────────────────
   const [editingTitle, setEditingTitle] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [stickToBottom, setStickToBottom] = useState(true);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [editSaving, setEditSaving] = useState(false);
@@ -2046,7 +2051,20 @@ export function ChatView() {
   useEffect(() => {
     pendingScrollConversationIdRef.current = activeConversationId ?? null;
     setShowScrollToBottom(false);
+    setStickToBottom(true);
   }, [activeConversationId]);
+
+  const syncScrollToBottomVisibility = useCallback(() => {
+    const target = scrollBoxRef.current;
+    if (!target) return;
+    const nextShowScrollToBottom = shouldShowScrollToBottom(
+      target.scrollHeight,
+      target.scrollTop,
+      target.clientHeight,
+      false,
+    );
+    setShowScrollToBottom((prev) => (prev === nextShowScrollToBottom ? prev : nextShowScrollToBottom));
+  }, []);
 
   // Load agent tool history from DB on conversation switch
   useEffect(() => {
@@ -2116,17 +2134,40 @@ export function ChatView() {
   }, [loadOlderMessages]);
 
   const handleBubbleListScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    setShowScrollToBottom(shouldShowScrollToBottom(event.currentTarget.scrollTop));
-    if (!hasOlderMessages || loading || loadingOlder) return;
     const target = event.currentTarget;
-    const distanceToHistoryTop = getDistanceToHistoryTop(target.scrollHeight, target.scrollTop, target.clientHeight);
+    setShowScrollToBottom(
+      shouldShowScrollToBottom(
+        target.scrollHeight,
+        target.scrollTop,
+        target.clientHeight,
+        false,
+      ),
+    );
+    const keepAutoScroll = shouldKeepAutoScroll(
+      target.scrollHeight,
+      target.scrollTop,
+      target.clientHeight,
+      false,
+      1,
+    );
+    if (keepAutoScroll !== stickToBottom) {
+      setStickToBottom(keepAutoScroll);
+    }
+    if (!hasOlderMessages || loading || loadingOlder) return;
+    const distanceToHistoryTop = getDistanceToHistoryTop(
+      target.scrollHeight,
+      target.scrollTop,
+      target.clientHeight,
+      false,
+    );
     if (distanceToHistoryTop > 24) return;
     void handleLoadOlderMessages();
-  }, [handleLoadOlderMessages, hasOlderMessages, loading, loadingOlder]);
+  }, [handleLoadOlderMessages, hasOlderMessages, loading, loadingOlder, stickToBottom]);
 
   const handleScrollToBottom = useCallback(() => {
     bubbleListRef.current?.scrollTo({ top: 'bottom', behavior: 'smooth' });
     setShowScrollToBottom(false);
+    setStickToBottom(true);
   }, []);
 
   // Scroll to bottom when streaming starts (user sent a message while scrolled up)
@@ -2137,6 +2178,7 @@ export function ChatView() {
       setTimeout(() => {
         bubbleListRef.current?.scrollTo({ top: 'bottom', behavior: 'smooth' });
         setShowScrollToBottom(false);
+        setStickToBottom(true);
       }, 50);
     }
     prevStreamingRef.current = streaming;
@@ -2439,6 +2481,18 @@ export function ChatView() {
   const lastBubbleKey = finalBubbleItems.length > 0
     ? String(finalBubbleItems[finalBubbleItems.length - 1].key)
     : '';
+
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(() => {
+      if (stickToBottom) {
+        bubbleListRef.current?.scrollTo({ top: 'bottom', behavior: 'auto' });
+        setShowScrollToBottom(false);
+        return;
+      }
+      syncScrollToBottomVisibility();
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [finalBubbleItems, stickToBottom, syncScrollToBottomVisibility]);
 
   useEffect(() => {
     if (!activeConversationId || bubbleItems.length === 0) return;
@@ -3227,7 +3281,7 @@ export function ChatView() {
               key={bubbleListThemeKey}
               ref={bubbleListRef}
               items={finalBubbleItems}
-              autoScroll
+              autoScroll={false}
               onScroll={handleBubbleListScroll}
               role={roles}
               style={{
