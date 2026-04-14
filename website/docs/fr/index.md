@@ -27,31 +27,31 @@ hero:
       link: https://github.com/AQBot-Desktop/AQBot
 
 features:
-  - icon: 🤖
+  - icon: robot
     title: Chat multi-modèles
     details: Connectez-vous à OpenAI, Claude, Gemini, DeepSeek, Qwen et toute API compatible. Rotation de clés multiples, sortie en streaming, blocs de réflexion.
-  - icon: 🧠
+  - icon: thunderbolt
     title: AI Agent (Beta)
     details: Mode Agent pour l'exécution autonome de tâches. Lecture/écriture de fichiers, exécution de commandes, analyse de code — trois niveaux de permissions + sandbox de répertoire de travail.
-  - icon: 🔌
+  - icon: api
     title: Appel d'outils MCP
     details: Implémentation complète du Model Context Protocol. Support stdio, SSE, StreamableHTTP. Connectez des outils externes en un clic. Outils MCP intégrés comme @aqbot/fetch.
-  - icon: 🌐
+  - icon: cloud-server
     title: Passerelle API intégrée
     details: Serveur API local compatible OpenAI. Utilisez AQBot comme backend pour Claude Code, Codex, Gemini CLI et plus. Gestion des clés, limitation de débit, SSL/TLS.
-  - icon: 📚
+  - icon: book
     title: Base de connaissances & RAG
     details: Embeddings vectoriels locaux avec sqlite-vec. Réponses IA basées sur vos documents privés — les données ne quittent jamais votre machine.
-  - icon: 🔍
+  - icon: search
     title: Recherche web
     details: Intégration Tavily, Zhipu WebSearch, Bocha. Résultats de recherche avec sources de citation injectés dans le contexte de conversation.
-  - icon: ✏️
+  - icon: edit
     title: Rendu de contenu riche
     details: Markdown, LaTeX, diagrammes Mermaid, diagrammes d'architecture D2, éditeur Monaco avec aperçu diff, panneaux Artifact.
-  - icon: ⌨️
+  - icon: desktop
     title: Expérience bureau
     details: Raccourcis globaux, barre système, démarrage automatique, toujours visible, thèmes sombre/clair, support proxy.
-  - icon: 🔒
+  - icon: lock
     title: Confidentialité & Sécurité
     details: Toutes les données stockées localement. Clés API chiffrées AES-256. Sauvegarde automatique locale ou WebDAV. Export de conversation en PNG/Markdown/JSON.
 ---

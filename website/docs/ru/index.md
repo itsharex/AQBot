@@ -27,31 +27,31 @@ hero:
       link: https://github.com/AQBot-Desktop/AQBot
 
 features:
-  - icon: 🤖
+  - icon: robot
     title: Мультимодельный чат
     details: Подключайтесь к OpenAI, Claude, Gemini, DeepSeek, Qwen и любым совместимым API. Ротация нескольких ключей, потоковый вывод, блоки размышлений.
-  - icon: 🧠
+  - icon: thunderbolt
     title: AI Agent (Beta)
     details: Режим Agent для автономного выполнения задач. Чтение/запись файлов, выполнение команд, анализ кода — три уровня разрешений + песочница рабочего каталога.
-  - icon: 🔌
+  - icon: api
     title: Вызов инструментов MCP
     details: Полная реализация Model Context Protocol. Поддержка stdio, SSE, StreamableHTTP. Подключение внешних инструментов одним кликом. Встроенные MCP-инструменты, такие как @aqbot/fetch.
-  - icon: 🌐
+  - icon: cloud-server
     title: Встроенный API-шлюз
     details: Локальный API-сервер, совместимый с OpenAI. Используйте AQBot как бэкенд для Claude Code, Codex, Gemini CLI и других. Управление ключами, ограничение частоты запросов, SSL/TLS.
-  - icon: 📚
+  - icon: book
     title: База знаний & RAG
     details: Локальные векторные эмбеддинги с sqlite-vec. Ответы ИИ на основе ваших приватных документов — данные никогда не покидают вашу машину.
-  - icon: 🔍
+  - icon: search
     title: Веб-поиск
     details: Интеграция с Tavily, Zhipu WebSearch, Bocha. Результаты поиска с источниками цитирования внедряются в контекст разговора.
-  - icon: ✏️
+  - icon: edit
     title: Богатый рендеринг контента
     details: Markdown, LaTeX, диаграммы Mermaid, архитектурные диаграммы D2, редактор кода Monaco с предпросмотром diff, панели Artifact.
-  - icon: ⌨️
+  - icon: desktop
     title: Опыт рабочего стола
     details: Глобальные горячие клавиши, системный трей, автозапуск, поверх всех окон, тёмная/светлая темы, поддержка прокси.
-  - icon: 🔒
+  - icon: lock
     title: Конфиденциальность & Безопасность
     details: Все данные хранятся локально. Ключи API зашифрованы AES-256. Автоматическое резервное копирование локально или на WebDAV. Экспорт разговора в PNG/Markdown/JSON.
 ---

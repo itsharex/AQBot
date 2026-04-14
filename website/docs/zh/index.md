@@ -30,31 +30,31 @@ hero:
       link: https://github.com/AQBot-Desktop/AQBot
 
 features:
-  - icon: 🤖
+  - icon: robot
     title: 多模型对话
     details: 接入 OpenAI、Claude、Gemini、DeepSeek、Qwen 等所有兼容 API。多密钥轮询、流式输出、Thinking 折叠展开。
-  - icon: 🧠
+  - icon: thunderbolt
     title: AI Agent (Beta)
     details: 切换至 Agent 模式，AI 自主执行任务。读写文件、运行命令、分析代码——三级权限控制 + 工作目录沙箱，安全可控。
-  - icon: 🔌
+  - icon: api
     title: MCP 工具调用
     details: 完整实现 Model Context Protocol，支持 stdio、SSE、StreamableHTTP。一键连接外部工具，内置 @aqbot/fetch 等 MCP 工具。
-  - icon: 🌐
+  - icon: cloud-server
     title: 内置 API 网关
     details: 本地 OpenAI 兼容 API 服务器，可作为 Claude Code、Codex、Gemini CLI 等工具的后端。密钥管理、速率限制、SSL/TLS。
-  - icon: 📚
+  - icon: book
     title: 知识库 & RAG
     details: 本地向量嵌入（sqlite-vec），AI 基于你的私有文档回答，数据不出本地。
-  - icon: 🔍
+  - icon: search
     title: 联网搜索
     details: 集成 Tavily、智谱 WebSearch、Bocha，搜索结果附带引用来源，自动注入对话上下文。
-  - icon: ✏️
+  - icon: edit
     title: 丰富内容渲染
     details: Markdown、LaTeX 公式、Mermaid 流程图、D2 架构图、Monaco 代码编辑器 diff 预览、Artifact 独立面板。
-  - icon: ⌨️
+  - icon: desktop
     title: 桌面体验
     details: 全局快捷键、系统托盘、开机自启、窗口置顶、深浅主题、代理支持。
-  - icon: 🔒
+  - icon: lock
     title: 隐私安全
     details: 所有数据本地存储，AES-256 加密 API 密钥。支持自动备份到本地、WebDAV。对话导出为 PNG/Markdown/JSON。
 ---

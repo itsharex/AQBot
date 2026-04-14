@@ -17,6 +17,7 @@
     }
   },
   "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
     "lucide-vue-next": "^1.0.0",
     "swiper": "^12.1.3"
   }

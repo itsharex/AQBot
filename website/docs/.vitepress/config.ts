@@ -54,7 +54,7 @@ export default defineConfig({
 
   locales: {
     root: {
-      label: 'English',
+      label: '🇺🇸 English',
       lang: 'en',
       title: 'AQBot',
       description: 'AQBot — Open-source AI desktop client with built-in AI gateway, multi-model chat, MCP server support.',
@@ -76,7 +76,7 @@ export default defineConfig({
       },
     },
     zh: {
-      label: '简体中文',
+      label: '🇨🇳 简体中文',
       lang: 'zh-CN',
       link: '/zh/',
       title: 'AQBot',
@@ -104,7 +104,7 @@ export default defineConfig({
       },
     },
     'zh-tw': {
-      label: '繁體中文',
+      label: '🇭🇰 繁體中文',
       lang: 'zh-TW',
       link: '/zh-tw/',
       title: 'AQBot',
@@ -132,7 +132,7 @@ export default defineConfig({
       },
     },
     ja: {
-      label: '日本語',
+      label: '🇯🇵 日本語',
       lang: 'ja',
       link: '/ja/',
       title: 'AQBot',
@@ -160,7 +160,7 @@ export default defineConfig({
       },
     },
     ko: {
-      label: '한국어',
+      label: '🇰🇷 한국어',
       lang: 'ko',
       link: '/ko/',
       title: 'AQBot',
@@ -188,7 +188,7 @@ export default defineConfig({
       },
     },
     fr: {
-      label: 'Français',
+      label: '🇫🇷 Français',
       lang: 'fr',
       link: '/fr/',
       title: 'AQBot',
@@ -216,7 +216,7 @@ export default defineConfig({
       },
     },
     de: {
-      label: 'Deutsch',
+      label: '🇩🇪 Deutsch',
       lang: 'de',
       link: '/de/',
       title: 'AQBot',
@@ -244,7 +244,7 @@ export default defineConfig({
       },
     },
     es: {
-      label: 'Español',
+      label: '🇪🇸 Español',
       lang: 'es',
       link: '/es/',
       title: 'AQBot',
@@ -272,7 +272,7 @@ export default defineConfig({
       },
     },
     ru: {
-      label: 'Русский',
+      label: '🇷🇺 Русский',
       lang: 'ru',
       link: '/ru/',
       title: 'AQBot',
@@ -300,7 +300,7 @@ export default defineConfig({
       },
     },
     hi: {
-      label: 'हिन्दी',
+      label: '🇮🇳 हिन्दी',
       lang: 'hi',
       link: '/hi/',
       title: 'AQBot',
@@ -328,7 +328,7 @@ export default defineConfig({
       },
     },
     ar: {
-      label: 'العربية',
+      label: '🇸🇦 العربية',
       lang: 'ar',
       link: '/ar/',
       title: 'AQBot',

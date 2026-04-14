@@ -27,31 +27,31 @@ hero:
       link: https://github.com/AQBot-Desktop/AQBot
 
 features:
-  - icon: 🤖
+  - icon: robot
     title: Multi-Modell-Chat
     details: Verbinden Sie sich mit OpenAI, Claude, Gemini, DeepSeek, Qwen und jeder kompatiblen API. Multi-Key-Rotation, Streaming-Ausgabe, Denkblöcke.
-  - icon: 🧠
+  - icon: thunderbolt
     title: AI Agent (Beta)
     details: Agent-Modus für autonome Aufgabenausführung. Dateien lesen/schreiben, Befehle ausführen, Code analysieren — drei Berechtigungsstufen + Arbeitsverzeichnis-Sandbox.
-  - icon: 🔌
+  - icon: api
     title: MCP-Tool-Aufruf
     details: Vollständige Model Context Protocol-Implementierung. Unterstützung für stdio, SSE, StreamableHTTP. Mit einem Klick externe Tools verbinden. Integrierte MCP-Tools wie @aqbot/fetch.
-  - icon: 🌐
+  - icon: cloud-server
     title: Integriertes API-Gateway
     details: Lokaler OpenAI-kompatibler API-Server. Verwenden Sie AQBot als Backend für Claude Code, Codex, Gemini CLI und mehr. Schlüsselverwaltung, Rate-Limiting, SSL/TLS.
-  - icon: 📚
+  - icon: book
     title: Wissensbasis & RAG
     details: Lokale Vektoreinbettungen mit sqlite-vec. KI-Antworten basierend auf Ihren privaten Dokumenten — Daten verlassen nie Ihren Computer.
-  - icon: 🔍
+  - icon: search
     title: Websuche
     details: Integration von Tavily, Zhipu WebSearch, Bocha. Suchergebnisse mit Zitationsquellen werden in den Gesprächskontext injiziert.
-  - icon: ✏️
+  - icon: edit
     title: Rich-Content-Rendering
     details: Markdown, LaTeX, Mermaid-Diagramme, D2-Architekturdiagramme, Monaco-Code-Editor mit Diff-Vorschau, Artifact-Panels.
-  - icon: ⌨️
+  - icon: desktop
     title: Desktop-Erlebnis
     details: Globale Tastenkürzel, System-Tray, Auto-Start, immer im Vordergrund, Hell-/Dunkel-Themes, Proxy-Unterstützung.
-  - icon: 🔒
+  - icon: lock
     title: Datenschutz & Sicherheit
     details: Alle Daten lokal gespeichert. API-Schlüssel mit AES-256 verschlüsselt. Automatisches Backup lokal oder WebDAV. Gesprächsexport als PNG/Markdown/JSON.
 ---
