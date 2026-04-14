@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import DefaultTheme from 'vitepress/theme';
 import { useData } from 'vitepress';
-import DownloadHero from './DownloadHero.vue';
+import DownloadBar from './DownloadBar.vue';
+import ImageCarousel from './ImageCarousel.vue';
 
 const { Layout } = DefaultTheme;
 const { frontmatter } = useData();
@@ -9,30 +10,21 @@ const { frontmatter } = useData();
 
 <template>
   <Layout>
+    <template #home-hero-info-after>
+      <div v-if="frontmatter?.layout === 'home'" class="hero-actions-custom">
+        <DownloadBar />
+      </div>
+    </template>
     <template #home-features-before>
-      <div v-if="frontmatter?.layout === 'home'" class="home-download-section">
-        <DownloadHero />
+      <div v-if="frontmatter?.layout === 'home'">
+        <ImageCarousel />
       </div>
     </template>
   </Layout>
 </template>
 
 <style scoped>
-.home-download-section {
-  max-width: 1152px;
-  margin: 0 auto;
-  padding: 0 24px;
-}
-
-@media (min-width: 640px) {
-  .home-download-section {
-    padding: 0 48px;
-  }
-}
-
-@media (min-width: 960px) {
-  .home-download-section {
-    padding: 0 64px;
-  }
+.hero-actions-custom {
+  width: 100%;
 }
 </style>

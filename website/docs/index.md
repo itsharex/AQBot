@@ -12,19 +12,6 @@ hero:
   name: AQBot
   text: Your AI Desktop Assistant
   tagline: Multi-model chat, MCP tools, API gateway, knowledge base — all in one open-source client
-  image:
-    src: /logo.png
-    alt: AQBot
-  actions:
-    - theme: brand
-      text: Get Started
-      link: /guide/getting-started
-    - theme: alt
-      text: Download
-      link: /download
-    - theme: alt
-      text: GitHub
-      link: https://github.com/AQBot-Desktop/AQBot
 
 features:
   - icon: 🤖
