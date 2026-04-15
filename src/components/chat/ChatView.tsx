@@ -1040,8 +1040,8 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
   );
   const singleD2Node = useMemo(() => getSingleD2CodeBlockNode(nodes), [nodes]);
   const hasDeferredHeavyNodes = useMemo(
-    () => containsDeferredHeavyNode(nodes) || content.includes('```'),
-    [content, nodes],
+    () => !isStreaming && (containsDeferredHeavyNode(nodes) || content.includes('```')),
+    [content, nodes, isStreaming],
   );
   const [readyToRenderHeavyNodes, setReadyToRenderHeavyNodes] = useState(!hasDeferredHeavyNodes);
   const rendererKey = `${isDarkMode ? 'dark' : 'light'}:${codeBlockDarkTheme}:${codeBlockLightTheme}`;
@@ -2546,6 +2546,12 @@ export function ChatView() {
       if (msg?.status === 'error') {
         continue;
       }
+      // Skip the actively streaming message — NodeRenderer handles incremental
+      // parsing internally via its `content` prop, avoiding full O(n) re-parse
+      // on every 16ms flush.
+      if (streaming && msg?.id === streamingMessageId) {
+        continue;
+      }
 
       const messageId = String(item.key);
       const cached = cache.get(messageId);
@@ -2566,7 +2572,7 @@ export function ChatView() {
     }
 
     return next;
-  }, [bubbleItems, assistantByParentId, messageById]);
+  }, [bubbleItems, assistantByParentId, messageById, streaming, streamingMessageId]);
   // ── Format timestamp ──────────────────────────────────────────────
   const formatTime = useCallback((ts: number) => {
     const d = new Date(ts);
@@ -2870,7 +2876,7 @@ export function ChatView() {
             {msgMarker}
             <AssistantMarkdown
               content={content}
-              nodes={parsedNodes}
+              nodes={isStreaming ? undefined : parsedNodes}
               isDarkMode={isDarkMode}
               isStreaming={isStreaming}
               codeBlockDarkTheme={codeBlockDarkTheme}

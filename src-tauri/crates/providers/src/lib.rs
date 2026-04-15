@@ -174,7 +174,7 @@ pub(crate) fn parse_base64_data_url(url: &str) -> Option<(String, String)> {
 /// - "http"/"socks5": use explicit proxy with address/port
 /// - None or "none": disable all proxies
 pub fn build_http_client(proxy_config: Option<&ProviderProxyConfig>) -> Result<reqwest::Client> {
-    let mut builder = reqwest::Client::builder();
+    let mut builder = reqwest::Client::builder().use_rustls_tls();
 
     if let Some(config) = proxy_config {
         match config.proxy_type.as_deref() {
@@ -209,8 +209,13 @@ pub fn build_http_client(proxy_config: Option<&ProviderProxyConfig>) -> Result<r
     }
 
     builder
+        .tcp_nodelay(true)
         .build()
         .map_err(|e| AQBotError::Provider(format!("Failed to build HTTP client: {}", e)))
+}
+
+pub fn build_default_http_client() -> Result<reqwest::Client> {
+    build_http_client(None)
 }
 
 /// Default User-Agent: `AQBot-{os}_{arch}/{version}`
@@ -249,4 +254,13 @@ pub fn apply_headers_to_request(
         builder = builder.header("User-Agent", default_user_agent());
     }
     builder
+}
+
+/// Force uncompressed transfer for streaming requests so SSE chunks are not
+/// delayed by upstream/content-encoding buffering.
+pub fn apply_stream_headers_to_request(
+    builder: reqwest::RequestBuilder,
+    custom_headers: &Option<std::collections::HashMap<String, String>>,
+) -> reqwest::RequestBuilder {
+    apply_headers_to_request(builder, custom_headers).header("Accept-Encoding", "identity")
 }

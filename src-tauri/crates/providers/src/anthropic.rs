@@ -21,7 +21,7 @@ pub struct AnthropicAdapter {
 impl AnthropicAdapter {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::builder().no_proxy().build().expect("Failed to build default HTTP client"),
+            client: crate::build_default_http_client().expect("Failed to build default HTTP client"),
         }
     }
 
@@ -456,7 +456,7 @@ impl ProviderAdapter for AnthropicAdapter {
         let (tx, rx) = futures::channel::mpsc::unbounded();
 
         tokio::spawn(async move {
-            let resp = match crate::apply_headers_to_request(
+            let resp = match crate::apply_stream_headers_to_request(
                 client
                     .post(&url)
                     .header("x-api-key", &api_key)
