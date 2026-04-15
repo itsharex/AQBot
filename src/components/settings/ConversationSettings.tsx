@@ -40,6 +40,17 @@ export function ConversationSettings() {
             ]}
           />
         </div>
+        <Divider style={{ margin: '4px 0' }} />
+        <div className="flex items-center justify-between" style={rowStyle}>
+          <div>
+            <div>{t('settings.renderUserMarkdown')}</div>
+            <div style={{ fontSize: 12, color: token.colorTextDescription }}>{t('settings.renderUserMarkdownDesc')}</div>
+          </div>
+          <Switch
+            checked={settings.render_user_markdown ?? false}
+            onChange={(checked) => saveSettings({ render_user_markdown: checked })}
+          />
+        </div>
       </SettingsGroup>
 
       <SettingsGroup title={t('settings.multiModelDisplayMode')}>

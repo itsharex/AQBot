@@ -611,6 +611,8 @@ pub struct AppSettings {
     pub chat_minimap_style: String,
     /// Multi-model response display mode: "tabs" | "side-by-side" | "stacked".
     pub multi_model_display_mode: String,
+    /// Render user messages as Markdown (like AI messages). Default: false.
+    pub render_user_markdown: bool,
 }
 
 impl Default for AppSettings {
@@ -707,6 +709,7 @@ impl Default for AppSettings {
             chat_minimap_enabled: false,
             chat_minimap_style: "faq".to_string(),
             multi_model_display_mode: "tabs".to_string(),
+            render_user_markdown: false,
         }
     }
 }

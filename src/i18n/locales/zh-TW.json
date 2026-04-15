@@ -396,6 +396,8 @@
     "bubbleModern": "現代",
     "bubbleCompact": "緊湊",
     "bubbleMinimal": "簡約",
+    "renderUserMarkdown": "渲染用戶訊息",
+    "renderUserMarkdownDesc": "使用 Markdown 渲染用戶發送的訊息，包括程式碼區塊、換行等",
     "chatMinimap": "對話導航",
     "chatMinimapEnabled": "啟用對話導航",
     "chatMinimapEnabledDesc": "在聊天區域顯示浮動導航，方便快速定位歷史訊息",

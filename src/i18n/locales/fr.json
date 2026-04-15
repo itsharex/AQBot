@@ -396,6 +396,8 @@
     "bubbleModern": "Moderne",
     "bubbleCompact": "Compact",
     "bubbleMinimal": "Minimal",
+    "renderUserMarkdown": "Rendu Markdown des messages",
+    "renderUserMarkdownDesc": "Afficher les messages utilisateur avec le formatage Markdown, y compris les blocs de code, les sauts de ligne, etc.",
     "chatMinimap": "Navigation de chat",
     "chatMinimapEnabled": "Activer la navigation de chat",
     "chatMinimapEnabledDesc": "Affiche une navigation flottante dans la zone de chat pour un accès rapide aux messages",

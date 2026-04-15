@@ -396,6 +396,8 @@
     "bubbleModern": "आधुनिक",
     "bubbleCompact": "कॉम्पैक्ट",
     "bubbleMinimal": "न्यूनतम",
+    "renderUserMarkdown": "उपयोगकर्ता Markdown रेंडर करें",
+    "renderUserMarkdownDesc": "कोड ब्लॉक, लाइन ब्रेक आदि सहित Markdown फ़ॉर्मेटिंग के साथ उपयोगकर्ता संदेश प्रदर्शित करें",
     "chatMinimap": "चैट नेविगेशन",
     "chatMinimapEnabled": "चैट नेविगेशन सक्षम करें",
     "chatMinimapEnabledDesc": "संदेशों तक त्वरित पहुँच के लिए चैट क्षेत्र में फ़्लोटिंग नेविगेशन दिखाएं",

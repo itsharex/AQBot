@@ -396,6 +396,8 @@
     "bubbleModern": "Modern",
     "bubbleCompact": "Compact",
     "bubbleMinimal": "Minimal",
+    "renderUserMarkdown": "Render User Markdown",
+    "renderUserMarkdownDesc": "Render user messages with Markdown formatting including code blocks, line breaks, etc.",
     "chatMinimap": "Chat Navigation",
     "chatMinimapEnabled": "Enable Chat Navigation",
     "chatMinimapEnabledDesc": "Show a floating navigation overlay in the chat area for quick message access",

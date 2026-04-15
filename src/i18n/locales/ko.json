@@ -396,6 +396,8 @@
     "bubbleModern": "모던",
     "bubbleCompact": "컴팩트",
     "bubbleMinimal": "미니멀",
+    "renderUserMarkdown": "사용자 메시지 Markdown 렌더링",
+    "renderUserMarkdownDesc": "코드 블록, 줄바꿈 등 Markdown 서식으로 사용자 메시지를 렌더링합니다",
     "chatMinimap": "채팅 내비게이션",
     "chatMinimapEnabled": "채팅 내비게이션 활성화",
     "chatMinimapEnabledDesc": "채팅 영역에 플로팅 내비게이션을 표시하여 메시지에 빠르게 접근할 수 있습니다",

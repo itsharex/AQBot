@@ -396,6 +396,8 @@
     "bubbleModern": "モダン",
     "bubbleCompact": "コンパクト",
     "bubbleMinimal": "ミニマル",
+    "renderUserMarkdown": "ユーザーメッセージをMarkdownで表示",
+    "renderUserMarkdownDesc": "ユーザーメッセージをMarkdown形式で表示します（コードブロック、改行など）",
     "chatMinimap": "チャットナビゲーション",
     "chatMinimapEnabled": "チャットナビゲーションを有効化",
     "chatMinimapEnabledDesc": "チャットエリアにフローティングナビゲーションを表示し、メッセージへの素早いアクセスを可能にします",

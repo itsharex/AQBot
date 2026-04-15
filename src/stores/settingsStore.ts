@@ -83,6 +83,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   chat_minimap_enabled: false,
   chat_minimap_style: 'faq',
   multi_model_display_mode: 'tabs',
+  render_user_markdown: false,
   // WebDAV sync settings — must be present so stale saves never omit them
   webdav_host: null,
   webdav_username: null,

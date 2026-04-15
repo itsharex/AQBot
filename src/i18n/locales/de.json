@@ -396,6 +396,8 @@
     "bubbleModern": "Modern",
     "bubbleCompact": "Kompakt",
     "bubbleMinimal": "Minimal",
+    "renderUserMarkdown": "Nachrichten mit Markdown rendern",
+    "renderUserMarkdownDesc": "Benutzernachrichten mit Markdown-Formatierung rendern, einschließlich Codeblöcke, Zeilenumbrüche usw.",
     "chatMinimap": "Chat-Navigation",
     "chatMinimapEnabled": "Chat-Navigation aktivieren",
     "chatMinimapEnabledDesc": "Zeigt eine schwebende Navigation im Chatbereich für schnellen Zugriff auf Nachrichten",

@@ -2632,7 +2632,19 @@ export function ChatView() {
         ? (content: string) => (
             <div style={{ textAlign: 'right' }}>
               <span data-aqbot-msg={msg?.id} style={{ height: 0, overflow: 'hidden', lineHeight: 0 }} />
-              {content && <div style={{ whiteSpace: 'pre-wrap' }}>{content}</div>}
+              {content && (
+                settings.render_user_markdown
+                  ? <AssistantMarkdown
+                      content={content}
+                      isDarkMode={isDarkMode}
+                      isStreaming={false}
+                      codeBlockDarkTheme={codeBlockDarkTheme}
+                      codeBlockLightTheme={codeBlockLightTheme}
+                      codeBlockThemes={codeBlockThemes}
+                      codeFontFamily={settings.code_font_family || undefined}
+                    />
+                  : <div style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
+              )}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: content ? 8 : 0, justifyContent: 'flex-end' }}>
                 {attachments.map((att, i) => (
                   <AttachmentPreview
@@ -2647,7 +2659,18 @@ export function ChatView() {
         : (content: string) => (
             <>
               <span data-aqbot-msg={msg?.id} style={{ height: 0, overflow: 'hidden', lineHeight: 0 }} />
-              {content}
+              {settings.render_user_markdown
+                ? <AssistantMarkdown
+                    content={content}
+                    isDarkMode={isDarkMode}
+                    isStreaming={false}
+                    codeBlockDarkTheme={codeBlockDarkTheme}
+                    codeBlockLightTheme={codeBlockLightTheme}
+                    codeBlockThemes={codeBlockThemes}
+                    codeFontFamily={settings.code_font_family || undefined}
+                  />
+                : content
+              }
             </>
           ),
       header: (
@@ -2726,7 +2749,7 @@ export function ChatView() {
         />
       ),
     };
-  }, [activeConversationId, deleteMessageGroup, formatTime, getBubbleVariant, handleEditMessage, messageApi, messageById, profile.name, regenerateMessage, t, token.colorError, token.colorPrimary, userAvatar]);
+  }, [activeConversationId, codeBlockDarkTheme, codeBlockLightTheme, codeBlockThemes, deleteMessageGroup, formatTime, getBubbleVariant, handleEditMessage, isDarkMode, messageApi, messageById, profile.name, regenerateMessage, settings.code_font_family, settings.render_user_markdown, t, token.colorError, token.colorPrimary, userAvatar]);
 
   const aiRole = useCallback((bubbleData: BubbleItemType) => {
     // bubbleData.key is parent_message_id for stable rendering

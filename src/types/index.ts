@@ -419,6 +419,8 @@ export interface AppSettings {
   chat_minimap_style?: 'faq' | 'sticky';
   /** Multi-model response display mode */
   multi_model_display_mode?: 'tabs' | 'side-by-side' | 'stacked';
+  /** Render user messages as Markdown (like AI messages). Default: false */
+  render_user_markdown?: boolean;
 }
 
 // === Streaming ===
