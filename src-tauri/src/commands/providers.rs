@@ -81,6 +81,24 @@ pub async fn add_provider_key(
 }
 
 #[tauri::command]
+pub async fn update_provider_key(
+    state: State<'_, AppState>,
+    key_id: String,
+    raw_key: String,
+) -> Result<ProviderKey, String> {
+    let encrypted =
+        aqbot_core::crypto::encrypt_key(&raw_key, &state.master_key).map_err(|e| e.to_string())?;
+    let prefix = if raw_key.len() >= 8 {
+        format!("{}...", &raw_key[..8])
+    } else {
+        raw_key.clone()
+    };
+    aqbot_core::repo::provider::update_provider_key(&state.sea_db, &key_id, &encrypted, &prefix)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn delete_provider_key(state: State<'_, AppState>, key_id: String) -> Result<(), String> {
     aqbot_core::repo::provider::delete_provider_key(&state.sea_db, &key_id)
         .await
@@ -354,4 +372,3 @@ pub async fn reorder_providers(
         .await
         .map_err(|e| e.to_string())
 }
-

@@ -23,7 +23,7 @@ import {
   App,
   theme,
 } from 'antd';
-import { Maximize2, Mic, Lightbulb, Database, Trash2, Eye, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown, Expand, Shrink, SquarePen, ListChecks, X, Power, PowerOff, Pencil } from 'lucide-react';
+import { Maximize2, Mic, Lightbulb, Database, Trash2, Eye, EyeOff, Heart, Key, MessageSquare, Plus, RefreshCw, Search, Settings, Minimize2, Wrench, Undo2, CircleHelp, ChevronRight, ChevronDown, Expand, Shrink, SquarePen, ListChecks, X, Power, PowerOff, Pencil } from 'lucide-react';
 import { ModelIcon } from '@lobehub/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -98,6 +98,7 @@ const DEFAULT_HOSTS: Record<ProviderType, string> = {
   custom: '',
 };
 
+type KeyModalMode = 'add' | 'edit';
 type ModelSyncStatus = 'synced' | 'local-only' | 'remote-only';
 
 interface ModelSyncEntry {
@@ -193,6 +194,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const deleteProvider = useProviderStore((s) => s.deleteProvider);
   const setSelectedProviderId = useUIStore((s) => s.setSelectedProviderId);
   const addProviderKey = useProviderStore((s) => s.addProviderKey);
+  const updateProviderKey = useProviderStore((s) => s.updateProviderKey);
   const deleteProviderKey = useProviderStore((s) => s.deleteProviderKey);
   const toggleProviderKey = useProviderStore((s) => s.toggleProviderKey);
   const validateProviderKey = useProviderStore((s) => s.validateProviderKey);
@@ -202,8 +204,14 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   const saveModels = useProviderStore((s) => s.saveModels);
   const testModel = useProviderStore((s) => s.testModel);
 
-  const [addKeyModal, setAddKeyModal] = useState(false);
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [keyModalMode, setKeyModalMode] = useState<KeyModalMode>('add');
+  const [activeKeyId, setActiveKeyId] = useState<string | null>(null);
   const [keyValue, setKeyValue] = useState('');
+  const [keyModalLoading, setKeyModalLoading] = useState(false);
+  const [keyModalSubmitting, setKeyModalSubmitting] = useState(false);
+  const [revealedKeys, setRevealedKeys] = useState<Record<string, string>>({});
+  const [revealingKeys, setRevealingKeys] = useState<Set<string>>(new Set());
   const [validatingKeys, setValidatingKeys] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
@@ -339,6 +347,8 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
   useEffect(() => {
     setApiHostLocal(provider?.api_host ?? '');
     setApiPathLocal(provider?.api_path ?? '');
+    setRevealedKeys({});
+    setRevealingKeys(new Set());
     try {
       const obj = JSON.parse(provider?.custom_headers ?? '{}') as Record<string, string>;
       setCustomHeadersLocal(Object.entries(obj).map(([k, v]) => `${k}=${v}`).join('\n'));
@@ -410,16 +420,82 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
     setAddModelModalOpen(true);
   }, []);
 
-  const handleAddKey = useCallback(async () => {
-    if (!keyValue.trim()) return;
+  const resetKeyModal = useCallback(() => {
+    setKeyModalOpen(false);
+    setKeyModalMode('add');
+    setActiveKeyId(null);
+    setKeyValue('');
+    setKeyModalLoading(false);
+    setKeyModalSubmitting(false);
+  }, []);
+
+  const handleOpenAddKey = useCallback(() => {
+    setKeyModalMode('add');
+    setActiveKeyId(null);
+    setKeyValue('');
+    setKeyModalLoading(false);
+    setKeyModalOpen(true);
+  }, []);
+
+  const handleToggleRevealKey = useCallback(async (keyId: string) => {
+    if (revealedKeys[keyId]) {
+      setRevealedKeys((prev) => {
+        const next = { ...prev };
+        delete next[keyId];
+        return next;
+      });
+      return;
+    }
+    setRevealingKeys((prev) => new Set(prev).add(keyId));
     try {
-      await addProviderKey(providerId, keyValue);
-      setKeyValue('');
-      setAddKeyModal(false);
+      const raw = await invoke<string>('get_decrypted_provider_key', { keyId });
+      setRevealedKeys((prev) => ({ ...prev, [keyId]: raw }));
+    } catch (e) {
+      message.error(t('error.loadFailed') + ': ' + String(e));
+    } finally {
+      setRevealingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(keyId);
+        return next;
+      });
+    }
+  }, [message, revealedKeys, t]);
+
+  const handleOpenEditKey = useCallback(async (keyId: string) => {
+    setKeyModalMode('edit');
+    setActiveKeyId(keyId);
+    setKeyValue('');
+    setKeyModalLoading(true);
+    setKeyModalOpen(true);
+    try {
+      const raw = await invoke<string>('get_decrypted_provider_key', { keyId });
+      setKeyValue(raw);
+    } catch (e) {
+      resetKeyModal();
+      message.error(t('error.loadFailed') + ': ' + String(e));
+    } finally {
+      setKeyModalLoading(false);
+    }
+  }, [message, resetKeyModal, t]);
+
+  const handleSubmitKey = useCallback(async () => {
+    const nextValue = keyValue.trim();
+    if (!nextValue || keyModalLoading) return;
+    setKeyModalSubmitting(true);
+    try {
+      if (keyModalMode === 'add') {
+        await addProviderKey(providerId, nextValue);
+      } else if (keyModalMode === 'edit' && activeKeyId) {
+        await updateProviderKey(activeKeyId, nextValue);
+        setRevealedKeys((prev) => ({ ...prev, [activeKeyId]: nextValue }));
+      }
+      resetKeyModal();
     } catch {
       message.error(t('error.saveFailed'));
+    } finally {
+      setKeyModalSubmitting(false);
     }
-  }, [keyValue, providerId, addProviderKey, message, t]);
+  }, [activeKeyId, addProviderKey, keyModalLoading, keyModalMode, keyValue, message, providerId, resetKeyModal, t, updateProviderKey]);
 
   const handleValidateKey = useCallback(
     async (keyId: string) => {
@@ -939,7 +1015,7 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
           <Button
             size="small"
             icon={<Plus size={14} />}
-            onClick={() => setAddKeyModal(true)}
+            onClick={handleOpenAddKey}
           >
             {t('settings.addKey')}
           </Button>
@@ -962,9 +1038,28 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
                     onChange={(checked) => toggleProviderKey(key.id, checked)}
                   />
                   <Key size={14} />
-                  <Text code>{key.key_prefix}••••••••</Text>
+                  <Text code style={{ wordBreak: 'break-all' }}>
+                    {revealedKeys[key.id] ?? `${key.key_prefix}••••••••`}
+                  </Text>
                 </Space>
                 <Space size="small">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={revealedKeys[key.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    aria-label={t(revealedKeys[key.id] ? 'common.hide' : 'settings.viewKey')}
+                    title={t(revealedKeys[key.id] ? 'common.hide' : 'settings.viewKey')}
+                    loading={revealingKeys.has(key.id)}
+                    onClick={() => handleToggleRevealKey(key.id)}
+                  />
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<Pencil size={14} />}
+                    aria-label={t('settings.editKey')}
+                    title={t('settings.editKey')}
+                    onClick={() => handleOpenEditKey(key.id)}
+                  />
                   <CopyButton
                     text={async () => {
                       const raw = await invoke<string>('get_decrypted_provider_key', { keyId: key.id });
@@ -1512,22 +1607,27 @@ export function ProviderDetail({ providerId }: ProviderDetailProps) {
 
       {/* Add Key Modal */}
       <Modal
-        title={t('settings.addKey')}
-        open={addKeyModal}
+        title={t(keyModalMode === 'add' ? 'settings.addKey' : 'settings.editKey')}
+        open={keyModalOpen}
         mask={{ enabled: true, blur: true }}
-        onOk={handleAddKey}
-        onCancel={() => {
-          setAddKeyModal(false);
-          setKeyValue('');
-        }}
-        okText={t('common.confirm')}
+        onOk={handleSubmitKey}
+        onCancel={resetKeyModal}
+        okText={t(keyModalMode === 'add' ? 'common.confirm' : 'settings.saveKey')}
         cancelText={t('common.cancel')}
+        confirmLoading={keyModalSubmitting}
+        destroyOnHidden
       >
-        <Input.Password
-          value={keyValue}
-          onChange={(e) => setKeyValue(e.target.value)}
-          placeholder="sk-..."
-        />
+        {keyModalLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Spin size="small" />
+          </div>
+        ) : (
+          <Input
+            value={keyValue}
+            onChange={(e) => setKeyValue(e.target.value)}
+            placeholder="sk-..."
+          />
+        )}
       </Modal>
 
       <Modal

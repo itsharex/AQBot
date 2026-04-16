@@ -2,7 +2,7 @@ import { App } from 'antd';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProviderConfig } from '@/types';
+import type { ProviderConfig, ProviderKey } from '@/types';
 import { ProviderDetail } from '../ProviderDetail';
 
 const mocks = vi.hoisted(() => ({
@@ -52,6 +52,21 @@ function createProviderFixture(): ProviderConfig {
     sort_order: 0,
     created_at: 0,
     updated_at: 0,
+  };
+}
+
+function createProviderKeyFixture(overrides: Partial<ProviderKey> = {}): ProviderKey {
+  return {
+    id: 'key-1',
+    provider_id: 'provider-1',
+    key_encrypted: 'enc-1',
+    key_prefix: 'sk-old',
+    enabled: true,
+    last_validated_at: null,
+    last_error: null,
+    rotation_index: 0,
+    created_at: 0,
+    ...overrides,
   };
 }
 
@@ -199,6 +214,78 @@ describe('ProviderDetail', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByDisplayValue('gpt-5.4')).toBeInTheDocument();
+  });
+
+  it('toggles the decrypted key inline between revealed and hidden states', async () => {
+    provider.keys = [createProviderKeyFixture()];
+
+    render(
+      <App>
+        <ProviderDetail providerId="provider-1" />
+      </App>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'settings.viewKey' }));
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith('get_decrypted_provider_key', { keyId: 'key-1' });
+    });
+
+    expect(screen.getByText('sk-test-secret')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'settings.viewKey' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'common.hide' }));
+
+    expect(screen.queryByText('sk-test-secret')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'settings.viewKey' })).toBeInTheDocument();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses plain text input when adding a key', async () => {
+    render(
+      <App>
+        <ProviderDetail providerId="provider-1" />
+      </App>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'settings.addKey' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const input = within(dialog).getByRole('textbox');
+    await userEvent.type(input, 'sk-added-secret');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+
+    await waitFor(() => {
+      expect(mocks.addProviderKey).toHaveBeenCalledWith('provider-1', 'sk-added-secret');
+    });
+  });
+
+  it('uses plain text input when editing a key and saves the updated value', async () => {
+    provider.keys = [createProviderKeyFixture()];
+
+    render(
+      <App>
+        <ProviderDetail providerId="provider-1" />
+      </App>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'settings.editKey' }));
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith('get_decrypted_provider_key', { keyId: 'key-1' });
+    });
+
+    const dialog = await screen.findByRole('dialog');
+    const input = within(dialog).getByRole('textbox');
+    expect(input).toHaveValue('sk-test-secret');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'sk-updated-secret');
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'settings.saveKey' }));
+
+    await waitFor(() => {
+      expect(mocks.updateProviderKey).toHaveBeenCalledWith('key-1', 'sk-updated-secret');
+    });
   });
 
   it('syncs remote models without overwriting existing local model settings', async () => {

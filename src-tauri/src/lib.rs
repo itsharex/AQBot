@@ -76,6 +76,7 @@ pub fn run() {
             commands::providers::delete_provider,
             commands::providers::toggle_provider,
             commands::providers::add_provider_key,
+            commands::providers::update_provider_key,
             commands::providers::delete_provider_key,
             commands::providers::toggle_provider_key,
             commands::providers::get_decrypted_provider_key,

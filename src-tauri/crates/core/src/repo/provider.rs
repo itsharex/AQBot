@@ -281,6 +281,27 @@ pub async fn add_provider_key(
     Ok(key_from_entity(row))
 }
 
+pub async fn update_provider_key(
+    db: &DatabaseConnection,
+    key_id: &str,
+    key_encrypted: &str,
+    key_prefix: &str,
+) -> Result<ProviderKey> {
+    let row = provider_keys::Entity::find_by_id(key_id)
+        .one(db)
+        .await?
+        .ok_or_else(|| AQBotError::NotFound(format!("ProviderKey {}", key_id)))?;
+
+    let mut am: provider_keys::ActiveModel = row.into();
+    am.key_encrypted = Set(key_encrypted.to_string());
+    am.key_prefix = Set(key_prefix.to_string());
+    am.last_validated_at = Set(None);
+    am.last_error = Set(None);
+    am.update(db).await?;
+
+    get_provider_key(db, key_id).await
+}
+
 pub async fn delete_provider_key(db: &DatabaseConnection, key_id: &str) -> Result<()> {
     let result = provider_keys::Entity::delete_by_id(key_id).exec(db).await?;
 
@@ -623,5 +644,51 @@ pub async fn resolve_provider_id(db: &DatabaseConnection, id: &str) -> Result<St
         ensure_builtin_provider(db, builtin_id).await
     } else {
         Ok(id.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::create_test_pool;
+
+    #[tokio::test]
+    async fn provider_key_update_rewrites_encrypted_value_and_prefix() {
+        let h = create_test_pool().await.unwrap();
+        let db = &h.conn;
+
+        let provider = create_provider(
+            db,
+            CreateProviderInput {
+                name: "Test".into(),
+                provider_type: ProviderType::Custom,
+                api_host: "https://example.com".into(),
+                api_path: None,
+                enabled: true,
+                builtin_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let key = add_provider_key(db, &provider.id, "enc_old_key", "sk-old")
+            .await
+            .unwrap();
+
+        let updated = update_provider_key(db, &key.id, "enc_new_key", "sk-new")
+            .await
+            .unwrap();
+        assert_eq!(updated.id, key.id);
+        assert_eq!(updated.provider_id, provider.id);
+        assert_eq!(updated.key_encrypted, "enc_new_key");
+        assert_eq!(updated.key_prefix, "sk-new");
+        assert_eq!(updated.rotation_index, key.rotation_index);
+        assert_eq!(updated.created_at, key.created_at);
+        assert_eq!(updated.last_validated_at, None);
+        assert_eq!(updated.last_error, None);
+
+        let fetched = get_provider_key(db, &key.id).await.unwrap();
+        assert_eq!(fetched.key_encrypted, "enc_new_key");
+        assert_eq!(fetched.key_prefix, "sk-new");
     }
 }
