@@ -343,13 +343,7 @@ fn convert_messages(messages: &[ChatMessage]) -> (Option<GeminiContent>, Vec<Gem
 }
 
 fn make_gen_config(request: &ChatRequest) -> Option<GeminiGenerationConfig> {
-    let thinking_config = request.thinking_budget.and_then(|b| {
-        if b == 0 {
-            None
-        } else {
-            Some(GeminiThinkingConfig { thinking_budget: b })
-        }
-    });
+    let thinking_config = request.thinking_budget.map(|b| GeminiThinkingConfig { thinking_budget: b });
     if request.temperature.is_some()
         || request.top_p.is_some()
         || request.max_tokens.is_some()

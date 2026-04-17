@@ -120,6 +120,98 @@ fn strip_think_tags(content: &str) -> String {
     s
 }
 
+#[derive(Default)]
+struct DisabledThinkingStripState {
+    in_think_block: bool,
+    trailing_fragment: String,
+}
+
+fn think_tag_partial_suffix_len(input: &str, tag: &str) -> usize {
+    let max_len = input.len().min(tag.len().saturating_sub(1));
+    for len in (1..=max_len).rev() {
+        if input.ends_with(&tag[..len]) {
+            return len;
+        }
+    }
+    0
+}
+
+fn strip_disabled_thinking_content(content: &str) -> String {
+    strip_think_tags(content)
+}
+
+fn strip_disabled_thinking_delta(
+    delta: &str,
+    state: &mut DisabledThinkingStripState,
+) -> String {
+    if delta.is_empty() && state.trailing_fragment.is_empty() {
+        return String::new();
+    }
+
+    let mut combined = std::mem::take(&mut state.trailing_fragment);
+    combined.push_str(delta);
+
+    const THINK_OPEN: &str = "<think";
+    const THINK_CLOSE: &str = "</think>";
+
+    let mut stripped = String::with_capacity(combined.len());
+    let mut cursor = 0usize;
+
+    loop {
+        if cursor >= combined.len() {
+            return stripped;
+        }
+
+        if state.in_think_block {
+            if let Some(end_offset) = combined[cursor..].find(THINK_CLOSE) {
+                cursor += end_offset + THINK_CLOSE.len();
+                state.in_think_block = false;
+                continue;
+            }
+
+            let remaining = &combined[cursor..];
+            let suffix_len = think_tag_partial_suffix_len(remaining, THINK_CLOSE);
+            if suffix_len > 0 {
+                state.trailing_fragment = remaining[remaining.len() - suffix_len..].to_string();
+            }
+            return stripped;
+        }
+
+        if let Some(start_offset) = combined[cursor..].find(THINK_OPEN) {
+            let start = cursor + start_offset;
+            stripped.push_str(&combined[cursor..start]);
+
+            let after_tag = &combined[start + THINK_OPEN.len()..];
+            let is_tag = after_tag.starts_with('>') || after_tag.starts_with(' ');
+            if !is_tag {
+                stripped.push_str(THINK_OPEN);
+                cursor = start + THINK_OPEN.len();
+                continue;
+            }
+
+            if let Some(close_offset) = combined[start..].find('>') {
+                cursor = start + close_offset + 1;
+                state.in_think_block = true;
+                continue;
+            }
+
+            state.trailing_fragment = combined[start..].to_string();
+            return stripped;
+        }
+
+        let remaining = &combined[cursor..];
+        let suffix_len = think_tag_partial_suffix_len(remaining, THINK_OPEN);
+        if suffix_len > 0 {
+            let safe_len = remaining.len() - suffix_len;
+            stripped.push_str(&remaining[..safe_len]);
+            state.trailing_fragment = remaining[safe_len..].to_string();
+        } else {
+            stripped.push_str(remaining);
+        }
+        return stripped;
+    }
+}
+
 /// Strip display-only tags from assistant message content so they aren't sent to the AI.
 /// Strips: `<knowledge-retrieval data-aqbot="1">` and `<memory-retrieval data-aqbot="1">` tags,
 /// `:::mcp ... :::` fenced blocks, and `<think>...</think>` blocks.
@@ -404,6 +496,7 @@ async fn consume_stream(
     model_id: &str,
     provider_id: &str,
     cancel_flag: &AtomicBool,
+    suppress_thinking: bool,
 ) -> (
     String,              // full_content (includes <think> blocks)
     Option<TokenUsage>,
@@ -425,6 +518,7 @@ async fn consume_stream(
     let mut in_thinking_block = false;
     let mut thinking_block_start: Option<std::time::Instant> = None;
     let mut thinking_durations: Vec<u64> = Vec::new();
+    let mut disabled_thinking_strip_state = DisabledThinkingStripState::default();
 
     while let Some(result) = stream.next().await {
         // Check for cancellation
@@ -435,6 +529,21 @@ async fn consume_stream(
         match result {
             Ok(chunk) => {
                 let is_done = chunk.done;
+                let content_delta = chunk.content.as_deref().map(|content| {
+                    if suppress_thinking {
+                        strip_disabled_thinking_delta(
+                            content,
+                            &mut disabled_thinking_strip_state,
+                        )
+                    } else {
+                        content.to_string()
+                    }
+                });
+                let thinking_delta = if suppress_thinking {
+                    None
+                } else {
+                    chunk.thinking.clone()
+                };
 
                 // Build the emitted chunk with thinking merged into content
                 let mut emit_content = String::new();
@@ -443,7 +552,7 @@ async fn consume_stream(
                 // Handle thinking chunks → merge into content with <think> tags
                 // Uses <think data-aq> to distinguish our injected blocks from
                 // upstream <think> tags (e.g. DeepSeek returns <think> in content)
-                if let Some(ref t) = chunk.thinking {
+                if let Some(ref t) = thinking_delta {
                     if !t.is_empty() {
                         if first_token_time.is_none() {
                             first_token_time = Some(std::time::Instant::now());
@@ -463,7 +572,7 @@ async fn consume_stream(
                 }
 
                 // Handle content chunks → close any open <think> block first
-                if let Some(ref c) = chunk.content {
+                if let Some(ref c) = content_delta {
                     if !c.is_empty() {
                         if first_token_time.is_none() {
                             first_token_time = Some(std::time::Instant::now());
@@ -578,8 +687,19 @@ async fn consume_stream(
         full_content.push_str("\n</think>\n\n");
     }
 
+    if suppress_thinking
+        && !disabled_thinking_strip_state.in_think_block
+        && !disabled_thinking_strip_state.trailing_fragment.is_empty()
+        && !"<think".starts_with(&disabled_thinking_strip_state.trailing_fragment)
+    {
+        full_content.push_str(&disabled_thinking_strip_state.trailing_fragment);
+    }
+
     // Post-process: replace each <think data-aq> with <think totalMs="N">
     full_content = fixup_think_tags(&full_content, &thinking_durations);
+    if suppress_thinking {
+        full_content = strip_disabled_thinking_content(&full_content);
+    }
 
     // Compute timing metrics
     let first_token_latency_ms = first_token_time
@@ -1295,6 +1415,7 @@ fn spawn_stream_task(
             };
 
             let mut stream = adapter.chat_stream(&ctx, request);
+            let suppress_thinking = thinking_budget == Some(0);
             let (content, usage, tool_calls, stream_error, iter_tps, iter_ttft) = consume_stream(
                 &app,
                 &mut stream,
@@ -1303,6 +1424,7 @@ fn spawn_stream_task(
                 &model_id,
                 &provider.id,
                 &cancel_flag,
+                suppress_thinking,
             )
             .await;
 
