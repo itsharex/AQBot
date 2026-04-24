@@ -8,6 +8,7 @@ import type { Message } from '@/types';
 import { CopyButton } from '@/components/common/CopyButton';
 import { stripAqbotTags } from '@/lib/chatMarkdown';
 import { getLatestVersionsByModel } from '@/lib/chatMultiModel';
+import { useConversationStore } from '@/stores';
 
 export type MultiModelDisplayMode = 'tabs' | 'side-by-side' | 'stacked';
 
@@ -57,6 +58,7 @@ export const MultiModelDisplay = React.memo(function MultiModelDisplay({
   versions,
   activeMessageId,
   mode,
+  conversationId,
   onSwitchVersion,
   onDeleteVersion,
   renderContent,
@@ -75,6 +77,7 @@ export const MultiModelDisplay = React.memo(function MultiModelDisplay({
         versions={versions}
         activeMessageId={activeMessageId}
         mode={mode}
+        conversationId={conversationId}
         onSwitchVersion={onSwitchVersion}
         onDeleteVersion={onDeleteVersion}
         renderContent={renderContent}
@@ -87,7 +90,7 @@ export const MultiModelDisplay = React.memo(function MultiModelDisplay({
   );
 });
 
-interface MultiModelDisplayInnerProps extends Omit<MultiModelDisplayProps, 'multiModelDoneMessageIds' | 'conversationId'> {
+interface MultiModelDisplayInnerProps extends Omit<MultiModelDisplayProps, 'multiModelDoneMessageIds'> {
   token: ReturnType<typeof theme.useToken>['token'];
   t: ReturnType<typeof useTranslation>['t'];
 }
@@ -96,6 +99,7 @@ function MultiModelDisplayInner({
   versions,
   activeMessageId,
   mode,
+  conversationId,
   onSwitchVersion,
   onDeleteVersion,
   renderContent,
@@ -104,9 +108,20 @@ function MultiModelDisplayInner({
   token,
   t,
 }: MultiModelDisplayInnerProps) {
-  const latestByModel = useMemo(() => getLatestVersionsByModel(versions), [versions]);
-
   const parentMessageId = versions[0]?.parent_message_id;
+  const storeMessages = useConversationStore((state) => state.messages);
+  const storeStreaming = useConversationStore((state) => state.streaming);
+  const streamingConversationId = useConversationStore((state) => state.streamingConversationId);
+  const liveVersions = useMemo(() => {
+    if (!parentMessageId) return [];
+    return storeMessages.filter((message) =>
+      message.parent_message_id === parentMessageId && message.role === 'assistant'
+    );
+  }, [parentMessageId, storeMessages]);
+  const renderVersions = liveVersions.length > 0 ? liveVersions : versions;
+  const latestByModel = useMemo(() => getLatestVersionsByModel(renderVersions), [renderVersions]);
+  const isDisplayStreaming = storeStreaming && streamingConversationId === conversationId;
+
   // For side-by-side mode, force the .ant-bubble ancestor to take full width
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -164,7 +179,7 @@ function MultiModelDisplayInner({
   if (latestByModel.length <= 1) {
     const msg = latestByModel[0];
     if (!msg) return null;
-    return <>{renderContent(msg, msg.id === streamingMessageId)}</>;
+    return <>{renderContent(msg, isDisplayStreaming && (msg.id === streamingMessageId || msg.status === 'partial'))}</>;
   }
 
   const containerStyle: React.CSSProperties =
@@ -203,7 +218,9 @@ function MultiModelDisplayInner({
     <div ref={scrollRef} style={containerStyle} className={mode === 'side-by-side' ? 'aqbot-multi-model-scroll' : undefined}>
       {latestByModel.map((vMsg) => {
         const isActive = vMsg.id === activeMessageId;
-        const isVersionStreaming = vMsg.id === streamingMessageId;
+        const isVersionStreaming = isDisplayStreaming && (
+          vMsg.id === streamingMessageId || vMsg.status === 'partial'
+        );
         const { modelName, providerName } = getModelDisplayInfo(
           vMsg.model_id,
           vMsg.provider_id,

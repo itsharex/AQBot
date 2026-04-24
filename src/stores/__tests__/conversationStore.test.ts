@@ -514,6 +514,120 @@ describe('conversationStore pagination', () => {
     });
   });
 
+  it('keeps an inactive companion model visible while streaming chunks arrive and after final refresh', async () => {
+    vi.useFakeTimers();
+    const listeners = new Map<string, (event: unknown) => void>();
+    listenMock.mockImplementation(async (eventName: string, handler: (event: unknown) => void) => {
+      listeners.set(eventName, handler);
+      return () => {};
+    });
+    const { useConversationStore } = await import('../conversationStore');
+    const user = {
+      ...makeMessage(1),
+      id: 'user-1',
+      role: 'user' as const,
+      provider_id: null,
+      model_id: null,
+      parent_message_id: null,
+    };
+    const active = {
+      ...makeMessage(2),
+      id: 'assistant-a',
+      content: 'old answer',
+      provider_id: 'provider-a',
+      model_id: 'model-a',
+      parent_message_id: user.id,
+      is_active: true,
+      status: 'complete' as const,
+    };
+    const companionPlaceholder = {
+      ...makeMessage(4),
+      id: 'temp-assistant-c',
+      content: '',
+      provider_id: 'provider-c',
+      model_id: 'model-c',
+      parent_message_id: user.id,
+      is_active: false,
+      status: 'partial' as const,
+    };
+
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === 'list_messages_page') {
+        return Promise.resolve(makePage([user, active], false));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    useConversationStore.setState({
+      activeConversationId: 'conv-1',
+      streaming: true,
+      streamingMessageId: companionPlaceholder.id,
+      streamingConversationId: 'conv-1',
+      messages: [user, active, companionPlaceholder],
+    });
+
+    await useConversationStore.getState().startStreamListening();
+    const onChunk = listeners.get('chat-stream-chunk');
+    expect(onChunk).toBeTypeOf('function');
+
+    onChunk?.({
+      payload: {
+        conversation_id: 'conv-1',
+        message_id: 'assistant-c',
+        model_id: 'model-c',
+        provider_id: 'provider-c',
+        chunk: {
+          content: 'streamed',
+          thinking: null,
+          tool_calls: null,
+          done: false,
+          usage: null,
+        },
+      },
+    });
+    vi.advanceTimersByTime(20);
+
+    expect(useConversationStore.getState().messages.find((message) => message.id === 'assistant-c')).toMatchObject({
+      content: 'streamed',
+      is_active: false,
+      parent_message_id: user.id,
+      status: 'partial',
+    });
+    expect(useConversationStore.getState().messages.find((message) => message.id === active.id)?.is_active).toBe(true);
+
+    onChunk?.({
+      payload: {
+        conversation_id: 'conv-1',
+        message_id: 'assistant-c',
+        model_id: 'model-c',
+        provider_id: 'provider-c',
+        chunk: {
+          content: null,
+          thinking: null,
+          tool_calls: null,
+          done: true,
+          is_final: true,
+          usage: null,
+        },
+      },
+    });
+    vi.advanceTimersByTime(130);
+    await flushPromises();
+
+    expect(useConversationStore.getState().messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-a',
+      'assistant-c',
+    ]);
+    expect(useConversationStore.getState().messages.find((message) => message.id === 'assistant-c')).toMatchObject({
+      content: 'streamed',
+      is_active: false,
+      status: 'complete',
+    });
+
+    vi.useRealTimers();
+  });
+
   it('creates a new conversation from a category template when a category id is supplied', async () => {
     invokeMock.mockImplementation((cmd: string, args?: Record<string, unknown>) => {
       if (cmd === 'create_conversation') {

@@ -1,7 +1,8 @@
 import { App } from 'antd';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@/types';
+import { useConversationStore } from '@/stores';
 import { MultiModelDisplay } from '../MultiModelDisplay';
 
 vi.mock('react-i18next', () => ({
@@ -62,7 +63,40 @@ function renderDisplay(versions: Message[]) {
   );
 }
 
+function renderDisplayWithStreamingLabel(versions: Message[], streamingMessageId: string | null) {
+  return (
+    <App>
+      <MultiModelDisplay
+        versions={versions}
+        activeMessageId={versions[0]?.id ?? ''}
+        mode="side-by-side"
+        conversationId="conv-1"
+        onSwitchVersion={vi.fn()}
+        onDeleteVersion={vi.fn()}
+        streamingMessageId={streamingMessageId}
+        multiModelDoneMessageIds={[]}
+        getModelDisplayInfo={(modelId) => ({ modelName: modelId ?? '', providerName: '' })}
+        renderContent={(message, isStreaming) => (
+          <div data-testid={`content-${message.id}`}>
+            {isStreaming ? 'streaming' : 'stable'}:{message.content}
+          </div>
+        )}
+      />
+    </App>
+  );
+}
+
 describe('MultiModelDisplay', () => {
+  beforeEach(() => {
+    useConversationStore.setState({
+      messages: [],
+      activeConversationId: 'conv-1',
+      streaming: false,
+      streamingConversationId: null,
+      streamingMessageId: null,
+    });
+  });
+
   it('does not fall back to the error boundary when deleting down to one model', () => {
     const modelA = makeMessage({ id: 'assistant-a', model_id: 'model-a', content: 'alpha' });
     const modelB = makeMessage({ id: 'assistant-b', model_id: 'model-b', content: 'beta', is_active: false, version_index: 1 });
@@ -76,5 +110,45 @@ describe('MultiModelDisplay', () => {
 
     expect(screen.queryByText('Multi-model display error')).not.toBeInTheDocument();
     expect(screen.getByText('alpha')).toBeInTheDocument();
+  });
+
+  it('updates an inactive streaming card from the store without rerendering the parent bubble item', () => {
+    const modelA = makeMessage({ id: 'assistant-a', model_id: 'model-a', content: 'alpha' });
+    const modelB = makeMessage({ id: 'assistant-b', model_id: 'model-b', content: '', is_active: false, status: 'partial', version_index: 1 });
+    useConversationStore.setState({ messages: [modelA, modelB] });
+
+    render(renderDisplay([modelA, modelB]));
+
+    expect(screen.queryByText('streamed token')).not.toBeInTheDocument();
+
+    act(() => {
+      useConversationStore.setState({
+        messages: [modelA, { ...modelB, content: 'streamed token' }],
+      });
+    });
+
+    expect(screen.getByText('streamed token')).toBeInTheDocument();
+  });
+
+  it('treats partial cards as streaming while their conversation is streaming even without a matching streamingMessageId', () => {
+    const modelA = makeMessage({ id: 'assistant-a', model_id: 'model-a', content: 'alpha' });
+    const modelB = makeMessage({
+      id: 'assistant-b',
+      model_id: 'model-b',
+      content: '```ts\nconst token = 1;',
+      is_active: false,
+      status: 'partial',
+      version_index: 1,
+    });
+    useConversationStore.setState({
+      messages: [modelA, modelB],
+      streaming: true,
+      streamingConversationId: 'conv-1',
+      streamingMessageId: null,
+    });
+
+    render(renderDisplayWithStreamingLabel([modelA, modelB], null));
+
+    expect(screen.getByTestId('content-assistant-b')).toHaveTextContent('streaming:```ts');
   });
 });

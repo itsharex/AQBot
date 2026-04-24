@@ -27,7 +27,11 @@ import { InputArea } from './InputArea';
 import { ModelSelector } from './ModelSelector';
 import { parseSearchContent } from '@/lib/searchUtils';
 import { CHAT_CUSTOM_HTML_TAGS, parseChatMarkdown, stripAqbotTags, type ChatMarkdownNode } from '@/lib/chatMarkdown';
-import { hasMultipleModelVersions, selectRenderableVersionSet, shouldRenderStandaloneAssistantError } from '@/lib/chatMultiModel';
+import {
+  hasMultipleModelVersions,
+  selectRenderableVersionSet,
+  shouldRenderStandaloneAssistantError,
+} from '@/lib/chatMultiModel';
 import { WebSearchNode } from './WebSearchNode';
 import { MemoryRetrievalNode } from './MemoryRetrievalNode';
 import { KnowledgeRetrievalNode } from './KnowledgeRetrievalNode';
@@ -1143,7 +1147,7 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
           customId="chat"
           customHtmlTags={CHAT_CUSTOM_HTML_TAGS}
           final={!isStreaming}
-          typewriter={isStreaming}
+          typewriter={false}
           themes={codeBlockThemes}
           codeBlockLightTheme={codeBlockLightTheme}
           codeBlockDarkTheme={codeBlockDarkTheme}
@@ -1161,7 +1165,7 @@ const AssistantMarkdown = React.memo(function AssistantMarkdown({
           customId="chat"
           customHtmlTags={CHAT_CUSTOM_HTML_TAGS}
           final={!isStreaming}
-          typewriter={isStreaming}
+          typewriter={false}
           themes={codeBlockThemes}
           codeBlockLightTheme={codeBlockLightTheme}
           codeBlockDarkTheme={codeBlockDarkTheme}
@@ -2730,8 +2734,8 @@ export function ChatView() {
         continue;
       }
       // Skip the actively streaming message — NodeRenderer handles incremental
-      // parsing internally via its `content` prop. Keep that same renderer path
-      // after completion so the message does not switch from `content` to
+      // parsing via its `content` prop. Keep that same renderer path after
+      // completion so the message does not switch from `content` to
       // `nodes` and visibly re-render a second time.
       const shouldRenderFromContent = shouldRenderAssistantMarkdownFromContent(
         streaming && msg?.id === streamingMessageId,
@@ -2961,12 +2965,11 @@ export function ChatView() {
       ? undefined
       : aiContentNodesById.get(String(bubbleData.key));
     const { bubbleLoading: rawBubbleLoading, footerLoading } = getStreamingLoadingState(isStreaming, bubbleData.content);
-    // In multi-model mode, never hide the footer (which contains ModelTags) via
-    // the Ant Design Bubble loading state — Bubble hides footer when loading=true.
-    // In agent mode, never hide content because tool call cards must remain visible.
-    const isMultiModelMsg = !!multiModelParentId && msg?.parent_message_id === multiModelParentId;
+    // Never let Ant Design Bubble's loading state replace AI content while a
+    // stream is active; the markdown renderer receives incremental content and
+    // the content area renders its own lightweight placeholder before the first token.
     const isAgentMsg = activeConversation?.mode === 'agent';
-    const bubbleLoading = (isMultiModelMsg || isAgentMsg) ? false : rawBubbleLoading;
+    const bubbleLoading = false;
 
     // Determine effective display mode for this message
     const parentId = msg?.parent_message_id;
@@ -3035,9 +3038,7 @@ export function ChatView() {
           return <>{msgMarker}<Alert type="error" message={content} showIcon /></>;
         }
 
-        // In multi-model mode we disabled Bubble's built-in loading to keep
-        // footer visible, so show inline loading dots when content is empty.
-        if (isMultiModelMsg && rawBubbleLoading) {
+        if (!isAgentMsg && rawBubbleLoading) {
           return (
             <>{msgMarker}<span className="aqbot-streaming-dots" aria-hidden="true">
               <span /><span /><span />
