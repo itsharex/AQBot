@@ -65,11 +65,12 @@ describe('chat scroll helpers', () => {
     )).toBe(false);
   });
 
-  it('ignores non-user scroll departures caused by async layout shifts while pinned', () => {
-    expect(shouldIgnoreScrollDepartureFromBottom(false, true, false)).toBe(true);
-    expect(shouldIgnoreScrollDepartureFromBottom(false, true, true)).toBe(false);
-    expect(shouldIgnoreScrollDepartureFromBottom(true, true, false)).toBe(false);
-    expect(shouldIgnoreScrollDepartureFromBottom(false, false, false)).toBe(false);
+  it('ignores non-user scroll departures only when layout size changed while pinned', () => {
+    expect(shouldIgnoreScrollDepartureFromBottom(false, true, false, true)).toBe(true);
+    expect(shouldIgnoreScrollDepartureFromBottom(false, true, false, false)).toBe(false);
+    expect(shouldIgnoreScrollDepartureFromBottom(false, true, true, true)).toBe(false);
+    expect(shouldIgnoreScrollDepartureFromBottom(true, true, false, true)).toBe(false);
+    expect(shouldIgnoreScrollDepartureFromBottom(false, false, false, true)).toBe(false);
   });
 
   it('preserves the viewport anchor when older messages are prepended in reversed chat mode', () => {

@@ -2218,6 +2218,14 @@ export function ChatView() {
 
   const handleBubbleListScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     const target = event.currentTarget;
+    const currentMetrics = {
+      scrollHeight: target.scrollHeight,
+      clientHeight: target.clientHeight,
+    };
+    const hasLayoutChangedSinceLastMeasure = hasScrollLayoutMetricsChanged(
+      scrollLayoutMetricsRef.current,
+      currentMetrics,
+    );
     setShowScrollToBottom(
       shouldShowScrollToBottom(
         target.scrollHeight,
@@ -2238,6 +2246,7 @@ export function ChatView() {
       keepAutoScroll,
       stickToBottomRef.current,
       hadRecentUserScrollIntent,
+      hasLayoutChangedSinceLastMeasure,
     )) {
       bubbleListRef.current?.scrollTo({ top: 'bottom', behavior: 'auto' });
       setShowScrollToBottom(false);

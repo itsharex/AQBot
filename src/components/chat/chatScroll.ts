@@ -48,8 +48,9 @@ export function shouldIgnoreScrollDepartureFromBottom(
   keepAutoScroll: boolean,
   wasStickingToBottom: boolean,
   hadRecentUserScrollIntent: boolean,
+  hasLayoutChanged: boolean,
 ) {
-  return !keepAutoScroll && wasStickingToBottom && !hadRecentUserScrollIntent;
+  return !keepAutoScroll && wasStickingToBottom && !hadRecentUserScrollIntent && hasLayoutChanged;
 }
 
 export function shouldShowScrollToBottom(
