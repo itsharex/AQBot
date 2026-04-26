@@ -1,6 +1,32 @@
 export const CHAT_SCROLL_IS_REVERSED = false;
 export const CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD = 8;
 export const CHAT_SCROLL_TO_BOTTOM_VISIBILITY_THRESHOLD = 160;
+export const CHAT_SCROLL_BOX_SELECTOR = '.ant-bubble-list-scroll-box';
+export const CHAT_SCROLL_CONTENT_SELECTOR = '.ant-bubble-list-scroll-content';
+
+export type ChatScrollElements = {
+  scrollBox: HTMLElement | null;
+  scrollContent: HTMLElement | null;
+};
+
+export function resolveChatScrollElements(
+  root: ParentNode | null | undefined,
+  scrollBoxCandidate?: HTMLElement | null,
+): ChatScrollElements {
+  const rootNode = root as Node | null | undefined;
+  const candidateBelongsToRoot = Boolean(
+    scrollBoxCandidate
+      && (!rootNode || rootNode === scrollBoxCandidate || rootNode.contains(scrollBoxCandidate)),
+  );
+  const scrollBox: HTMLElement | null = candidateBelongsToRoot && scrollBoxCandidate
+    ? scrollBoxCandidate
+    : root?.querySelector<HTMLElement>(CHAT_SCROLL_BOX_SELECTOR) ?? null;
+  const scrollContent = scrollBox?.querySelector<HTMLElement>(CHAT_SCROLL_CONTENT_SELECTOR)
+    ?? (scrollBox?.firstElementChild as HTMLElement | null)
+    ?? null;
+
+  return { scrollBox, scrollContent };
+}
 
 export function getDistanceToHistoryTop(
   scrollHeight: number,
@@ -37,6 +63,19 @@ export function hasScrollLayoutMetricsChanged(
     || Math.abs(next.clientHeight - previous.clientHeight) > threshold;
 }
 
+export function hasMeasuredScrollLayout(metrics: ScrollLayoutMetrics) {
+  return metrics.scrollHeight > 0 && metrics.clientHeight > 0;
+}
+
+export function hasMeasuredScrollLayoutChanged(
+  previous: ScrollLayoutMetrics,
+  next: ScrollLayoutMetrics,
+  threshold = 1,
+) {
+  return hasMeasuredScrollLayout(previous)
+    && hasScrollLayoutMetricsChanged(previous, next, threshold);
+}
+
 export function shouldStickToBottomOnLayoutChange(
   previous: ScrollLayoutMetrics,
   next: ScrollLayoutMetrics,
@@ -46,7 +85,7 @@ export function shouldStickToBottomOnLayoutChange(
 ) {
   return wasStickingToBottom
     && !hadRecentUserScrollIntent
-    && hasScrollLayoutMetricsChanged(previous, next, threshold);
+    && hasMeasuredScrollLayoutChanged(previous, next, threshold);
 }
 
 export function shouldIgnoreScrollDepartureFromBottom(

@@ -4,7 +4,9 @@ import {
   CHAT_SCROLL_IS_REVERSED,
   getDistanceToHistoryTop,
   getScrollTopAfterPrepend,
+  hasMeasuredScrollLayoutChanged,
   hasScrollLayoutMetricsChanged,
+  resolveChatScrollElements,
   shouldIgnoreScrollDepartureFromBottom,
   shouldKeepAutoScroll,
   shouldStickToBottomOnLayoutChange,
@@ -59,6 +61,28 @@ describe('chat scroll helpers', () => {
       { scrollHeight: 1200, clientHeight: 800 },
       { scrollHeight: 1200.5, clientHeight: 800 },
     )).toBe(false);
+  });
+
+  it('does not treat the first unknown scroll measurement as a layout departure', () => {
+    const hasLayoutChanged = hasMeasuredScrollLayoutChanged(
+      { scrollHeight: 0, clientHeight: 0 },
+      { scrollHeight: 2000, clientHeight: 800 },
+    );
+
+    expect(hasLayoutChanged).toBe(false);
+    expect(shouldIgnoreScrollDepartureFromBottom(false, true, false, hasLayoutChanged)).toBe(false);
+  });
+
+  it('resolves the chat scroll elements from the message area before the Bubble.List ref is ready', () => {
+    const root = document.createElement('div');
+    const scrollBox = document.createElement('div');
+    const scrollContent = document.createElement('div');
+    scrollBox.className = 'ant-bubble-list-scroll-box';
+    scrollContent.className = 'ant-bubble-list-scroll-content';
+    scrollBox.appendChild(scrollContent);
+    root.appendChild(scrollBox);
+
+    expect(resolveChatScrollElements(root, null)).toEqual({ scrollBox, scrollContent });
   });
 
   it('keeps bottom lock on post-render layout changes only when the user was pinned', () => {

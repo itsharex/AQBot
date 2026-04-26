@@ -41,7 +41,9 @@ import {
   CHAT_SCROLL_IS_REVERSED,
   getDistanceToHistoryTop,
   getScrollTopAfterPrepend,
+  hasMeasuredScrollLayoutChanged,
   hasScrollLayoutMetricsChanged,
+  resolveChatScrollElements,
   shouldIgnoreScrollDepartureFromBottom,
   shouldKeepAutoScroll,
   shouldStickToBottomOnLayoutChange,
@@ -2060,6 +2062,17 @@ export function ChatView() {
     lastUserScrollIntentAtRef.current = Date.now();
   }, []);
 
+  const syncChatScrollRefs = useCallback(() => {
+    const { scrollBox, scrollContent } = resolveChatScrollElements(
+      messageAreaRef.current,
+      (bubbleListRef.current?.scrollBoxNativeElement as HTMLElement | null | undefined) ?? null,
+    );
+
+    scrollBoxRef.current = scrollBox;
+    scrollContentRef.current = scrollContent;
+    return { scrollBox, scrollContent };
+  }, []);
+
   const setStickToBottomState = useCallback((nextStickToBottom: boolean) => {
     stickToBottomRef.current = nextStickToBottom;
     setStickToBottom((prev) => (
@@ -2069,8 +2082,7 @@ export function ChatView() {
 
   // Keep scrollBoxRef in sync with bubbleListRef
   useEffect(() => {
-    scrollBoxRef.current = (bubbleListRef.current?.scrollBoxNativeElement as HTMLElement) ?? null;
-    scrollContentRef.current = (scrollBoxRef.current?.firstElementChild as HTMLElement | null) ?? null;
+    syncChatScrollRefs();
   });
 
   useEffect(() => {
@@ -2078,25 +2090,58 @@ export function ChatView() {
   }, [stickToBottom]);
 
   useEffect(() => {
-    const scrollBox = scrollBoxRef.current;
-    if (!scrollBox) return;
-
+    let attachedScrollBox: HTMLElement | null = null;
+    let frameId = 0;
     const handleUserIntent = () => {
       markUserScrollIntent();
     };
 
-    scrollBox.addEventListener('wheel', handleUserIntent, { passive: true });
-    scrollBox.addEventListener('touchstart', handleUserIntent, { passive: true });
-    scrollBox.addEventListener('touchmove', handleUserIntent, { passive: true });
-    scrollBox.addEventListener('pointerdown', handleUserIntent, { passive: true });
+    const detach = () => {
+      if (!attachedScrollBox) return;
+      attachedScrollBox.removeEventListener('wheel', handleUserIntent);
+      attachedScrollBox.removeEventListener('touchstart', handleUserIntent);
+      attachedScrollBox.removeEventListener('touchmove', handleUserIntent);
+      attachedScrollBox.removeEventListener('pointerdown', handleUserIntent);
+      attachedScrollBox = null;
+    };
+
+    const attach = () => {
+      frameId = 0;
+      const { scrollBox } = syncChatScrollRefs();
+      if (!scrollBox || scrollBox === attachedScrollBox) return;
+
+      detach();
+      attachedScrollBox = scrollBox;
+      attachedScrollBox.addEventListener('wheel', handleUserIntent, { passive: true });
+      attachedScrollBox.addEventListener('touchstart', handleUserIntent, { passive: true });
+      attachedScrollBox.addEventListener('touchmove', handleUserIntent, { passive: true });
+      attachedScrollBox.addEventListener('pointerdown', handleUserIntent, { passive: true });
+      scrollLayoutMetricsRef.current = {
+        scrollHeight: attachedScrollBox.scrollHeight,
+        clientHeight: attachedScrollBox.clientHeight,
+      };
+    };
+
+    const scheduleAttach = () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(attach);
+    };
+
+    scheduleAttach();
+    const observerRoot = messageAreaRef.current ?? document.body;
+    const observer = new MutationObserver(scheduleAttach);
+    observer.observe(observerRoot, { childList: true, subtree: true });
 
     return () => {
-      scrollBox.removeEventListener('wheel', handleUserIntent);
-      scrollBox.removeEventListener('touchstart', handleUserIntent);
-      scrollBox.removeEventListener('touchmove', handleUserIntent);
-      scrollBox.removeEventListener('pointerdown', handleUserIntent);
+      observer.disconnect();
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+      detach();
     };
-  }, [activeConversationId, bubbleListThemeKey, markUserScrollIntent, messages.length]);
+  }, [activeConversationId, bubbleListThemeKey, markUserScrollIntent, messages.length, syncChatScrollRefs]);
 
   // Scroll callback for ChatMinimap — finds bubble DOM element by message ID
   const minimapScrollTo = useCallback((messageId: string) => {
@@ -2143,7 +2188,7 @@ export function ChatView() {
   }, [streaming, streamingMessageId]);
 
   const syncScrollToBottomVisibility = useCallback(() => {
-    const target = scrollBoxRef.current;
+    const { scrollBox: target } = syncChatScrollRefs();
     if (!target) return;
     const nextShowScrollToBottom = shouldShowScrollToBottom(
       target.scrollHeight,
@@ -2152,7 +2197,7 @@ export function ChatView() {
       CHAT_SCROLL_IS_REVERSED,
     );
     setShowScrollToBottom((prev) => (prev === nextShowScrollToBottom ? prev : nextShowScrollToBottom));
-  }, []);
+  }, [syncChatScrollRefs]);
 
   // Load agent tool history from DB on conversation switch
   useEffect(() => {
@@ -2231,10 +2276,11 @@ export function ChatView() {
       scrollHeight: target.scrollHeight,
       clientHeight: target.clientHeight,
     };
-    const hasLayoutChangedSinceLastMeasure = hasScrollLayoutMetricsChanged(
+    const hasLayoutChangedSinceLastMeasure = hasMeasuredScrollLayoutChanged(
       scrollLayoutMetricsRef.current,
       currentMetrics,
     );
+    scrollLayoutMetricsRef.current = currentMetrics;
     setShowScrollToBottom(
       shouldShowScrollToBottom(
         target.scrollHeight,
@@ -2282,20 +2328,17 @@ export function ChatView() {
   }, [setStickToBottomState]);
 
   useEffect(() => {
-    const scrollBox = scrollBoxRef.current;
-    const scrollContent = scrollContentRef.current;
-    if (!scrollBox || !scrollContent || typeof ResizeObserver === 'undefined') return;
+    if (typeof ResizeObserver === 'undefined') return;
 
-    scrollLayoutMetricsRef.current = {
-      scrollHeight: scrollBox.scrollHeight,
-      clientHeight: scrollBox.clientHeight,
-    };
-
+    let resizeObserver: ResizeObserver | null = null;
+    let observedScrollBox: HTMLElement | null = null;
+    let observedScrollContent: HTMLElement | null = null;
     let frameId = 0;
+    let attachFrameId = 0;
 
     const handleLayoutResize = () => {
       frameId = 0;
-      const target = scrollBoxRef.current;
+      const { scrollBox: target } = syncChatScrollRefs();
       if (!target) return;
 
       const nextMetrics = {
@@ -2326,23 +2369,60 @@ export function ChatView() {
       syncScrollToBottomVisibility();
     };
 
-    const observer = new ResizeObserver(() => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId);
-      }
-      frameId = window.requestAnimationFrame(handleLayoutResize);
-    });
+    const disconnectResizeObserver = () => {
+      resizeObserver?.disconnect();
+      resizeObserver = null;
+      observedScrollBox = null;
+      observedScrollContent = null;
+    };
 
-    observer.observe(scrollBox);
-    observer.observe(scrollContent);
+    const attachResizeObserver = () => {
+      attachFrameId = 0;
+      const { scrollBox, scrollContent } = syncChatScrollRefs();
+      if (!scrollBox || !scrollContent) return;
+      if (scrollBox === observedScrollBox && scrollContent === observedScrollContent) return;
+
+      disconnectResizeObserver();
+      observedScrollBox = scrollBox;
+      observedScrollContent = scrollContent;
+      scrollLayoutMetricsRef.current = {
+        scrollHeight: scrollBox.scrollHeight,
+        clientHeight: scrollBox.clientHeight,
+      };
+
+      resizeObserver = new ResizeObserver(() => {
+        if (frameId) {
+          window.cancelAnimationFrame(frameId);
+        }
+        frameId = window.requestAnimationFrame(handleLayoutResize);
+      });
+      resizeObserver.observe(scrollBox);
+      resizeObserver.observe(scrollContent);
+    };
+
+    const scheduleAttach = () => {
+      if (attachFrameId) {
+        window.cancelAnimationFrame(attachFrameId);
+      }
+      attachFrameId = window.requestAnimationFrame(attachResizeObserver);
+    };
+
+    scheduleAttach();
+    const observerRoot = messageAreaRef.current ?? document.body;
+    const mutationObserver = new MutationObserver(scheduleAttach);
+    mutationObserver.observe(observerRoot, { childList: true, subtree: true });
 
     return () => {
-      observer.disconnect();
+      mutationObserver.disconnect();
+      if (attachFrameId) {
+        window.cancelAnimationFrame(attachFrameId);
+      }
       if (frameId) {
         window.cancelAnimationFrame(frameId);
       }
+      disconnectResizeObserver();
     };
-  }, [activeConversationId, bubbleListThemeKey, messages.length, syncScrollToBottomVisibility]);
+  }, [activeConversationId, bubbleListThemeKey, messages.length, syncChatScrollRefs, syncScrollToBottomVisibility]);
 
   // Scroll to bottom when streaming starts (user sent a message while scrolled up)
   const prevStreamingRef = useRef(false);
