@@ -14,6 +14,8 @@
   },
   "chat": {
     "newConversation": "Новый чат",
+    "newConversationInCurrentCategory": "Создать в {{category}}",
+    "newStandaloneConversation": "Создать отдельно",
     "searchPlaceholder": "Поиск чатов...",
     "inputPlaceholder": "Введите сообщение...",
     "send": "Отправить",

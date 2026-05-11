@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   setCollapsed: vi.fn(),
 }));
 
-const conversationState = {
+const conversationState: any = {
   conversations: [
     {
       id: 'conv-1',
@@ -80,7 +80,7 @@ const settingsState = {
   saveSettings: mocks.saveSettings,
 };
 
-const categoryState = {
+const categoryState: any = {
   categories: [],
   fetchCategories: mocks.fetchCategories,
   createCategory: mocks.createCategory,
@@ -91,7 +91,7 @@ const categoryState = {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => ({
+    t: (key: string, options?: Record<string, string>) => ({
       'chat.delete': '删除',
       'chat.directDeleteHint': '按住 Ctrl 可直接删除',
       'chat.deleteConfirm': '确定删除此对话？',
@@ -99,6 +99,8 @@ vi.mock('react-i18next', () => ({
       'chat.archived': '已归档',
       'chat.createCategory': '新建分类',
       'chat.newConversation': '新建对话',
+      'chat.newConversationInCurrentCategory': `在 ${options?.category ?? '当前分类'} 下新建`,
+      'chat.newStandaloneConversation': '独立新建',
       'chat.multiSelect': '多选',
       'chat.noConversations': '暂无对话',
       'chat.today': '今天',
@@ -131,7 +133,22 @@ vi.mock('antd', () => ({
   Checkbox: ({ checked, onChange, onClick }: any) => (
     <input type="checkbox" checked={checked} onChange={onChange} onClick={onClick} readOnly />
   ),
-  Dropdown: ({ children }: any) => <>{children}</>,
+  Dropdown: ({ children, menu }: any) => (
+    <div>
+      {children}
+      {menu?.items?.map((item: any) => (
+        <button
+          key={item.key}
+          type="button"
+          aria-label={typeof item.label === 'string' ? item.label : undefined}
+          onClick={() => menu.onClick?.({ key: item.key, domEvent: { stopPropagation: vi.fn() } })}
+        >
+          {item.icon}
+          {item.label}
+        </button>
+      ))}
+    </div>
+  ),
   Empty: ({ description }: any) => <div>{description}</div>,
   Avatar: () => null,
   theme: {
@@ -243,6 +260,36 @@ vi.mock('../CategoryEditModal', () => ({
 describe('ChatSidebar direct delete shortcut', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    conversationState.conversations = [
+      {
+        id: 'conv-1',
+        title: '快捷删除测试',
+        provider_id: 'provider-1',
+        model_id: 'model-1',
+        category_id: null,
+        parent_conversation_id: null,
+        is_pinned: false,
+        is_archived: false,
+        message_count: 0,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+    conversationState.activeConversationId = 'conv-1';
+    categoryState.categories = [];
+    mocks.createConversation.mockResolvedValue({
+      id: 'conv-new',
+      title: '新建对话',
+      provider_id: 'provider-1',
+      model_id: 'model-1',
+      category_id: null,
+      parent_conversation_id: null,
+      is_pinned: false,
+      is_archived: false,
+      message_count: 0,
+      created_at: 2,
+      updated_at: 2,
+    });
   });
 
   it('keeps the confirmation dialog for a normal menu delete click', () => {
@@ -296,5 +343,77 @@ describe('ChatSidebar direct delete shortcut', () => {
     expect(source).not.toContain('aqbot-chat-conversation-direct-delete');
     expect(source).toContain('.ant-conversations .ant-conversations-item-active .aqbot-chat-conversation-menu-delete');
     expect(source).toContain('opacity: 0;');
+  });
+
+  it('offers current-category and standalone choices when creating from a categorized conversation', async () => {
+    conversationState.conversations[0].category_id = 'cat-work';
+    categoryState.categories = [
+      {
+        id: 'cat-work',
+        name: '工作',
+        icon_type: null,
+        icon_value: null,
+        system_prompt: '工作分类提示词',
+        default_provider_id: null,
+        default_model_id: null,
+        default_temperature: null,
+        default_max_tokens: null,
+        default_top_p: null,
+        default_frequency_penalty: null,
+        sort_order: 0,
+        is_collapsed: false,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: '在 工作 下新建' }));
+
+    await waitFor(() => {
+      expect(mocks.createConversation).toHaveBeenCalledWith(
+        '新建对话',
+        'model-1',
+        'provider-1',
+        { categoryId: 'cat-work' },
+      );
+    });
+  });
+
+  it('lets users create a standalone conversation from a categorized conversation', async () => {
+    conversationState.conversations[0].category_id = 'cat-work';
+    categoryState.categories = [
+      {
+        id: 'cat-work',
+        name: '工作',
+        icon_type: null,
+        icon_value: null,
+        system_prompt: '工作分类提示词',
+        default_provider_id: null,
+        default_model_id: null,
+        default_temperature: null,
+        default_max_tokens: null,
+        default_top_p: null,
+        default_frequency_penalty: null,
+        sort_order: 0,
+        is_collapsed: false,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: '独立新建' }));
+
+    await waitFor(() => {
+      expect(mocks.createConversation).toHaveBeenCalledWith(
+        '新建对话',
+        'model-1',
+        'provider-1',
+        { categoryId: null },
+      );
+    });
   });
 });

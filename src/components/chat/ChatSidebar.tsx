@@ -297,6 +297,16 @@ export function ChatSidebar() {
 
   useEffect(() => { void fetchCategories() }, [fetchCategories])
 
+  const activeConversation = useMemo(
+    () => conversations.find((c) => c.id === activeConversationId) ?? null,
+    [activeConversationId, conversations],
+  )
+
+  const activeConversationCategory = useMemo(() => {
+    if (!activeConversation?.category_id) return null
+    return categories.find((cat) => cat.id === activeConversation.category_id) ?? null
+  }, [activeConversation?.category_id, categories])
+
   const handleNewConversation = useCallback(async (categoryId?: string | null) => {
     let provider: typeof providers[0] | undefined
     let model: typeof providers[0]['models'][0] | undefined
@@ -307,10 +317,9 @@ export function ChatSidebar() {
     }
 
     if (!provider || !model) {
-      const activeConv = conversations.find((c) => c.id === activeConversationId)
-      if (activeConv?.provider_id && activeConv?.model_id) {
-        provider = providers.find((p) => p.id === activeConv.provider_id && p.enabled)
-        model = provider?.models.find((m) => m.model_id === activeConv.model_id && m.enabled)
+      if (activeConversation?.provider_id && activeConversation?.model_id) {
+        provider = providers.find((p) => p.id === activeConversation.provider_id && p.enabled)
+        model = provider?.models.find((m) => m.model_id === activeConversation.model_id && m.enabled)
       }
     }
 
@@ -324,8 +333,7 @@ export function ChatSidebar() {
       return
     }
 
-    const activeConv = conversations.find((c) => c.id === activeConversationId)
-    const templateCategoryId = categoryId ?? activeConv?.category_id ?? null
+    const templateCategoryId = categoryId ?? null
     const conv = await createConversation(
       t('chat.newConversation'),
       model.model_id,
@@ -333,11 +341,38 @@ export function ChatSidebar() {
       { categoryId: templateCategoryId },
     )
     setActiveConversation(conv.id)
-  }, [providers, settings, conversations, activeConversationId, createConversation, setActiveConversation, messageApi, t])
+  }, [providers, settings, activeConversation, createConversation, setActiveConversation, messageApi, t])
+
+  const newConversationMenuItems = useMemo(() => {
+    if (!activeConversationCategory) return []
+    return [
+      {
+        key: 'current-category',
+        label: t('chat.newConversationInCurrentCategory', { category: activeConversationCategory.name }),
+        icon: <FolderOpen size={14} />,
+      },
+      {
+        key: 'standalone',
+        label: t('chat.newStandaloneConversation'),
+        icon: <MessageSquarePlus size={14} />,
+      },
+    ]
+  }, [activeConversationCategory, t])
+
+  const handleNewConversationMenuClick = useCallback(
+    ({ key }: { key: string }) => {
+      if (key === 'current-category' && activeConversationCategory) {
+        void handleNewConversation(activeConversationCategory.id)
+        return
+      }
+      void handleNewConversation(null)
+    },
+    [activeConversationCategory, handleNewConversation],
+  )
 
   useEffect(() => {
     const onShortcutNewConversation = () => {
-      void handleNewConversation();
+      void handleNewConversation(null);
     };
     window.addEventListener('aqbot:new-conversation', onShortcutNewConversation);
     return () => {
@@ -1238,12 +1273,28 @@ export function ChatSidebar() {
                 />
               </Tooltip>
               <Tooltip title={shortcutHint(t('chat.newConversation'), 'newConversation')}>
-                <Button
-                  type="text"
-                  icon={<MessageSquarePlus size={16} />}
-                  size="small"
-                  onClick={() => { void handleNewConversation() }}
-                />
+                {activeConversationCategory ? (
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      items: newConversationMenuItems,
+                      onClick: handleNewConversationMenuClick,
+                    }}
+                  >
+                    <Button
+                      type="text"
+                      icon={<MessageSquarePlus size={16} />}
+                      size="small"
+                    />
+                  </Dropdown>
+                ) : (
+                  <Button
+                    type="text"
+                    icon={<MessageSquarePlus size={16} />}
+                    size="small"
+                    onClick={() => { void handleNewConversation(null) }}
+                  />
+                )}
               </Tooltip>
             </>
           )}

@@ -14,6 +14,8 @@
   },
   "chat": {
     "newConversation": "新しい会話",
+    "newConversationInCurrentCategory": "{{category}} 内に新規作成",
+    "newStandaloneConversation": "単独で新規作成",
     "searchPlaceholder": "会話を検索...",
     "inputPlaceholder": "メッセージを入力...",
     "send": "送信",

@@ -14,6 +14,8 @@
   },
   "chat": {
     "newConversation": "नई बातचीत",
+    "newConversationInCurrentCategory": "{{category}} में नया बनाएँ",
+    "newStandaloneConversation": "स्वतंत्र नया बनाएँ",
     "searchPlaceholder": "बातचीत खोजें...",
     "inputPlaceholder": "संदेश टाइप करें...",
     "send": "भेजें",

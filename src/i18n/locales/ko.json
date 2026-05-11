@@ -14,6 +14,8 @@
   },
   "chat": {
     "newConversation": "새 대화",
+    "newConversationInCurrentCategory": "{{category}}에서 새로 만들기",
+    "newStandaloneConversation": "독립 새 대화",
     "searchPlaceholder": "대화 검색...",
     "inputPlaceholder": "메시지를 입력하세요...",
     "send": "전송",

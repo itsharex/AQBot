@@ -14,6 +14,8 @@
   },
   "chat": {
     "newConversation": "Neues Gespräch",
+    "newConversationInCurrentCategory": "In {{category}} neu erstellen",
+    "newStandaloneConversation": "Eigenständig erstellen",
     "searchPlaceholder": "Gespräche suchen…",
     "inputPlaceholder": "Nachricht eingeben…",
     "send": "Senden",

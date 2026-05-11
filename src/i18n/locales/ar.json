@@ -14,6 +14,8 @@
   },
   "chat": {
     "newConversation": "محادثة جديدة",
+    "newConversationInCurrentCategory": "إنشاء في {{category}}",
+    "newStandaloneConversation": "إنشاء مستقل",
     "searchPlaceholder": "البحث في المحادثات...",
     "inputPlaceholder": "اكتب رسالة...",
     "send": "إرسال",

@@ -14,6 +14,8 @@
   },
   "chat": {
     "newConversation": "新建對話",
+    "newConversationInCurrentCategory": "在 {{category}} 下新建",
+    "newStandaloneConversation": "獨立新建",
     "searchPlaceholder": "搜尋對話...",
     "inputPlaceholder": "輸入訊息...",
     "send": "傳送",
