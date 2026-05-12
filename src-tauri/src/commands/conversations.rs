@@ -13,6 +13,12 @@ use tauri::{Emitter, State};
 
 const RAG_CONTEXT_TIMEOUT: Duration = Duration::from_secs(60);
 const RAG_RETRIEVAL_FAILED_PREFIX: &str = "检索失败";
+const SYSTEM_PROMPT_LOG_EXCERPT_BYTES: usize = 80;
+
+fn system_prompt_log_excerpt(prompt: &str) -> &str {
+    let end = prompt.floor_char_boundary(prompt.len().min(SYSTEM_PROMPT_LOG_EXCERPT_BYTES));
+    &prompt[..end]
+}
 
 fn format_rag_failure_message(reason: &str) -> String {
     let reason = reason.trim();
@@ -2406,7 +2412,7 @@ pub async fn send_message(
         tracing::info!(
             "[send_message] model={} effective_system_prompt='{}'",
             &conversation.model_id,
-            &sys[..sys.floor_char_boundary(sys.len().min(80))]
+            system_prompt_log_excerpt(sys)
         );
         chat_messages.push(ChatMessage {
             role: if no_system_role {
@@ -3127,7 +3133,7 @@ pub async fn regenerate_with_model(
             "[regenerate_with_model] model={} provider={} effective_system_prompt='{}'",
             &conversation.model_id,
             &conversation.provider_id,
-            &sys[..sys.len().min(80)]
+            system_prompt_log_excerpt(sys)
         );
         chat_messages.push(ChatMessage {
             role: "system".to_string(),
@@ -3950,6 +3956,15 @@ mod tests {
             "项目排期讨论"
         );
         assert_eq!(clean_generated_title("\"API 调试记录\""), "API 调试记录");
+    }
+
+    #[test]
+    fn system_prompt_log_excerpt_does_not_split_multibyte_characters() {
+        let prompt = format!("{}小后续", "a".repeat(79));
+        let excerpt = system_prompt_log_excerpt(&prompt);
+
+        assert_eq!(excerpt, "a".repeat(79));
+        assert!(prompt.is_char_boundary(excerpt.len()));
     }
 
     #[test]
