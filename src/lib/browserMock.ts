@@ -399,6 +399,7 @@ const DEFAULT_SETTINGS = {
   content_safety_enabled: true,
   last_selected_conversation_id: null,
   chat_sidebar_collapsed: false,
+  inherit_conversation_preferences_on_create: true,
   chat_stream_first_packet_timeout_secs: 180,
   chat_stream_idle_timeout_secs: 90,
 };

@@ -460,6 +460,8 @@ export interface AppSettings {
   chat_minimap_style?: 'faq' | 'sticky';
   /** Collapse the chat page's secondary conversation sidebar. Default: false */
   chat_sidebar_collapsed?: boolean;
+  /** Inherit current conversation capability preferences when creating a new conversation. Default: true */
+  inherit_conversation_preferences_on_create?: boolean;
   /** Timeout before the first chat stream packet in seconds. 0 disables. */
   chat_stream_first_packet_timeout_secs?: number;
   /** Timeout between chat stream packets in seconds. 0 disables. */

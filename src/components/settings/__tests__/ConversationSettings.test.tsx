@@ -16,6 +16,9 @@ vi.mock('react-i18next', () => ({
       const labels: Record<string, string> = {
         'settings.additionalFeatures': '附加功能',
         'settings.chatMinimap': '对话导航',
+        'settings.newConversationDefaults': '新建对话',
+        'settings.inheritConversationPreferencesOnCreate': '继承当前对话能力配置',
+        'settings.inheritConversationPreferencesOnCreateDesc': '开启后，新建对话会沿用当前对话的联网、知识库、记忆、工具和思考设置。',
         'settings.chatStreamTimeouts': '流式响应超时',
         'settings.chatStreamTimeoutsDesc': '设置模型流式响应的首包和空闲等待时间，填 0 表示不限制。',
         'settings.chatStreamFirstPacketTimeout': '首包超时',
@@ -122,6 +125,7 @@ describe('ConversationSettings', () => {
       default_system_prompt: null,
       multi_model_display_mode: 'tabs',
       render_user_markdown: false,
+      inherit_conversation_preferences_on_create: true,
       document_attachment_reading_enabled: false,
       show_image_models_in_model_selector: false,
       chat_stream_first_packet_timeout_secs: 180,
@@ -215,6 +219,23 @@ describe('ConversationSettings', () => {
 
     expect(mocks.saveSettings).toHaveBeenCalledWith({
       chat_sidebar_collapsed: true,
+    });
+  });
+
+  it('saves the new-conversation inheritance setting when toggled', () => {
+    render(<ConversationSettings />);
+
+    const inheritanceGroup = screen.getByText('新建对话').parentElement?.parentElement;
+    expect(inheritanceGroup).not.toBeNull();
+    const toggle = within(inheritanceGroup as HTMLElement).getByRole('switch');
+
+    expect(screen.getByText('继承当前对话能力配置')).toBeInTheDocument();
+    expect(screen.getByText('开启后，新建对话会沿用当前对话的联网、知识库、记忆、工具和思考设置。')).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(mocks.saveSettings).toHaveBeenCalledWith({
+      inherit_conversation_preferences_on_create: false,
     });
   });
 });

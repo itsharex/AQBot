@@ -90,6 +90,21 @@ export function ConversationSettings() {
         </div>
       </SettingsGroup>
 
+      <SettingsGroup title={t('settings.newConversationDefaults')}>
+        <div className="flex items-center justify-between" style={rowStyle}>
+          <div>
+            <div>{t('settings.inheritConversationPreferencesOnCreate')}</div>
+            <div style={{ fontSize: 12, color: token.colorTextDescription }}>
+              {t('settings.inheritConversationPreferencesOnCreateDesc')}
+            </div>
+          </div>
+          <Switch
+            checked={settings.inherit_conversation_preferences_on_create ?? true}
+            onChange={(checked) => saveSettings({ inherit_conversation_preferences_on_create: checked })}
+          />
+        </div>
+      </SettingsGroup>
+
       <SettingsGroup title={t('settings.chatStreamTimeouts')}>
         <div style={{ fontSize: 12, color: token.colorTextDescription, marginBottom: 12 }}>
           {t('settings.chatStreamTimeoutsDesc')}

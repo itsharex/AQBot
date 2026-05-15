@@ -14,6 +14,10 @@ import { formatSearchContent, buildSearchTag } from '@/lib/searchUtils';
 import { buildKnowledgeTag, buildMemoryTag, type RagContextRetrievedEvent } from '@/lib/memoryUtils';
 import { useProviderStore } from '@/stores/providerStore';
 import { useSearchStore } from '@/stores/searchStore';
+import { useKnowledgeStore } from '@/stores/knowledgeStore';
+import { useMemoryStore } from '@/stores/memoryStore';
+import { useMcpStore } from '@/stores/mcpStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useCategoryStore } from './categoryStore';
 import type {
   Conversation,
@@ -120,6 +124,18 @@ function conversationPreferenceStateFromConversation(
   };
 }
 
+function emptyConversationPreferenceState(): ConversationPreferenceState {
+  return {
+    searchEnabled: false,
+    searchProviderId: null,
+    thinkingBudget: null,
+    thinkingLevel: null,
+    enabledMcpServerIds: [],
+    enabledKnowledgeBaseIds: [],
+    enabledMemoryNamespaceIds: [],
+  };
+}
+
 function conversationPreferenceUpdateFromState(
   state: Pick<
     ConversationState,
@@ -149,6 +165,49 @@ function conversationPreferenceUpdateFromState(
     enabled_mcp_server_ids: [...state.enabledMcpServerIds],
     enabled_knowledge_base_ids: [...state.enabledKnowledgeBaseIds],
     enabled_memory_namespace_ids: [...state.enabledMemoryNamespaceIds],
+  };
+}
+
+function emptyConversationPreferenceUpdate() {
+  return conversationPreferenceUpdateFromState(emptyConversationPreferenceState());
+}
+
+function dedupeStringList(values: string[]): string[] {
+  return values.filter((value, index) => values.indexOf(value) === index);
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function resolveValidConversationCapabilityIds(state: Pick<
+  ConversationState,
+  'enabledMcpServerIds' | 'enabledKnowledgeBaseIds' | 'enabledMemoryNamespaceIds'
+>) {
+  const mcpState = useMcpStore.getState();
+  const knowledgeState = useKnowledgeStore.getState();
+  const memoryState = useMemoryStore.getState();
+  const enabledMcpServers = mcpState.servers.filter((server) => server.enabled);
+  const uniqueMcpIds = dedupeStringList(state.enabledMcpServerIds);
+  const uniqueKnowledgeBaseIds = dedupeStringList(state.enabledKnowledgeBaseIds);
+  const uniqueMemoryNamespaceIds = dedupeStringList(state.enabledMemoryNamespaceIds);
+
+  return {
+    enabledMcpServerIds: mcpState.loading
+      ? uniqueMcpIds
+      : mcpState.servers.length === 0
+        ? uniqueMcpIds
+        : uniqueMcpIds.filter((id) => enabledMcpServers.some((server) => server.id === id)),
+    enabledKnowledgeBaseIds: knowledgeState.loading
+      ? uniqueKnowledgeBaseIds
+      : knowledgeState.bases.length === 0
+        ? uniqueKnowledgeBaseIds
+        : uniqueKnowledgeBaseIds.filter((id) => knowledgeState.bases.some((base) => base.id === id)),
+    enabledMemoryNamespaceIds: memoryState.loading
+      ? uniqueMemoryNamespaceIds
+      : memoryState.namespaces.length === 0
+        ? uniqueMemoryNamespaceIds
+        : uniqueMemoryNamespaceIds.filter((id) => memoryState.namespaces.some((item) => item.id === id)),
   };
 }
 
@@ -624,6 +683,65 @@ async function persistConversationPreferences(
       };
     });
   }
+}
+
+function sanitizeActiveConversationCapabilityIds(
+  set: ConversationStoreSet,
+  get: () => ConversationState,
+  conversationId: string,
+) {
+  const previous = {
+    enabledMcpServerIds: get().enabledMcpServerIds,
+    enabledKnowledgeBaseIds: get().enabledKnowledgeBaseIds,
+    enabledMemoryNamespaceIds: get().enabledMemoryNamespaceIds,
+  };
+  const next = resolveValidConversationCapabilityIds(previous);
+  const changed =
+    !sameStringList(previous.enabledMcpServerIds, next.enabledMcpServerIds)
+    || !sameStringList(previous.enabledKnowledgeBaseIds, next.enabledKnowledgeBaseIds)
+    || !sameStringList(previous.enabledMemoryNamespaceIds, next.enabledMemoryNamespaceIds);
+
+  if (!changed) return next;
+
+  set((state) => ({
+    enabledMcpServerIds: next.enabledMcpServerIds,
+    enabledKnowledgeBaseIds: next.enabledKnowledgeBaseIds,
+    enabledMemoryNamespaceIds: next.enabledMemoryNamespaceIds,
+    conversations: state.conversations.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+          ...conversation,
+          enabled_mcp_server_ids: next.enabledMcpServerIds,
+          enabled_knowledge_base_ids: next.enabledKnowledgeBaseIds,
+          enabled_memory_namespace_ids: next.enabledMemoryNamespaceIds,
+        }
+        : conversation
+    )),
+    archivedConversations: state.archivedConversations.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+          ...conversation,
+          enabled_mcp_server_ids: next.enabledMcpServerIds,
+          enabled_knowledge_base_ids: next.enabledKnowledgeBaseIds,
+          enabled_memory_namespace_ids: next.enabledMemoryNamespaceIds,
+        }
+        : conversation
+    )),
+  }));
+
+  void persistConversationPreferences(
+    set,
+    conversationId,
+    {
+      enabled_mcp_server_ids: next.enabledMcpServerIds,
+      enabled_knowledge_base_ids: next.enabledKnowledgeBaseIds,
+      enabled_memory_namespace_ids: next.enabledMemoryNamespaceIds,
+    },
+    next,
+    previous,
+  );
+
+  return next;
 }
 
 interface ConversationState {
@@ -1366,11 +1484,15 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       });
       let conversation = createdConversation;
       try {
+        const inheritConversationPreferences =
+          useSettingsStore.getState().settings.inherit_conversation_preferences_on_create ?? true;
         conversation = await invoke<Conversation>('update_conversation', {
           id: createdConversation.id,
           input: {
             ...categoryTemplateUpdateFromCategory(category),
-            ...conversationPreferenceUpdateFromState(get()),
+            ...(inheritConversationPreferences
+              ? conversationPreferenceUpdateFromState(get())
+              : emptyConversationPreferenceUpdate()),
           },
         });
       } catch (preferenceError) {
@@ -1574,8 +1696,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
     // Create assistant placeholder upfront (for search status or streaming)
     const tempAssistantId = `temp-assistant-${Date.now()}`;
-    const kbIds = get().enabledKnowledgeBaseIds;
-    const memIds = get().enabledMemoryNamespaceIds;
+    const capabilityIds = sanitizeActiveConversationCapabilityIds(set, get, conversationId);
+    const kbIds = capabilityIds.enabledKnowledgeBaseIds;
+    const memIds = capabilityIds.enabledMemoryNamespaceIds;
     const hasKnowledgeRag = kbIds.length > 0;
     const hasMemoryRag = memIds.length > 0;
     const hasAnyRag = hasKnowledgeRag || hasMemoryRag;
@@ -1648,11 +1771,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         _streamPrefix = '';
       }
 
-      const mcpIds = get().enabledMcpServerIds;
+      const mcpIds = capabilityIds.enabledMcpServerIds;
       const thinkingBudget = getEffectiveThinkingBudget(get, conversationId);
       const thinkingLevel = getEffectiveThinkingLevel(get, conversationId);
-      const kbIds = get().enabledKnowledgeBaseIds;
-      const memIds = get().enabledMemoryNamespaceIds;
       const userMessage = await invoke<Message>('send_message', {
         conversationId,
         content: finalContent,
@@ -2090,8 +2211,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     // Create placeholder for new version, preserving original created_at for position
     const tempAssistantId = `temp-assistant-${Date.now()}`;
     const parentId = userMsg.id;
-    const rKbIdsForPlaceholder = get().enabledKnowledgeBaseIds;
-    const rMemIdsForPlaceholder = get().enabledMemoryNamespaceIds;
+    const capabilityIds = sanitizeActiveConversationCapabilityIds(set, get, conversationId);
+    const rKbIdsForPlaceholder = capabilityIds.enabledKnowledgeBaseIds;
+    const rMemIdsForPlaceholder = capabilityIds.enabledMemoryNamespaceIds;
     const placeholderRagDisplay = [
       rKbIdsForPlaceholder.length > 0 ? buildKnowledgeTag('searching') : '',
       rMemIdsForPlaceholder.length > 0 ? buildMemoryTag('searching') : '',
@@ -2157,11 +2279,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     try {
       await get().startStreamListening();
 
-      const rMcpIds = get().enabledMcpServerIds;
+      const rMcpIds = capabilityIds.enabledMcpServerIds;
       const rThinkingBudget = getEffectiveThinkingBudget(get, conversationId);
       const rThinkingLevel = getEffectiveThinkingLevel(get, conversationId);
-      const rKbIds = get().enabledKnowledgeBaseIds;
-      const rMemIds = get().enabledMemoryNamespaceIds;
+      const rKbIds = capabilityIds.enabledKnowledgeBaseIds;
+      const rMemIds = capabilityIds.enabledMemoryNamespaceIds;
       await invoke('regenerate_message', {
         conversationId,
         userMessageId: userMsg.id,
@@ -2218,8 +2340,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
     // Create placeholder with the target model info
     const tempAssistantId = `temp-assistant-${Date.now()}`;
-    const rKbIdsForPlaceholder = get().enabledKnowledgeBaseIds;
-    const rMemIdsForPlaceholder = get().enabledMemoryNamespaceIds;
+    const capabilityIds = sanitizeActiveConversationCapabilityIds(set, get, conversationId);
+    const rKbIdsForPlaceholder = capabilityIds.enabledKnowledgeBaseIds;
+    const rMemIdsForPlaceholder = capabilityIds.enabledMemoryNamespaceIds;
     const placeholderRagDisplay = [
       rKbIdsForPlaceholder.length > 0 ? buildKnowledgeTag('searching') : '',
       rMemIdsForPlaceholder.length > 0 ? buildMemoryTag('searching') : '',
@@ -2265,11 +2388,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     try {
       await get().startStreamListening();
 
-      const rMcpIds = get().enabledMcpServerIds;
+      const rMcpIds = capabilityIds.enabledMcpServerIds;
       const rThinkingBudget = getEffectiveThinkingBudget(get, conversationId);
       const rThinkingLevel = getEffectiveThinkingLevel(get, conversationId);
-      const rKbIds = get().enabledKnowledgeBaseIds;
-      const rMemIds = get().enabledMemoryNamespaceIds;
+      const rKbIds = capabilityIds.enabledKnowledgeBaseIds;
+      const rMemIds = capabilityIds.enabledMemoryNamespaceIds;
       await invoke('regenerate_with_model', {
         conversationId,
         userMessageId: userMsg.id,

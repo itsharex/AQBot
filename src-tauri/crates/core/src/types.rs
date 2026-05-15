@@ -703,6 +703,8 @@ pub struct AppSettings {
     pub chat_minimap_style: String,
     /// Collapse the chat page's secondary conversation sidebar.
     pub chat_sidebar_collapsed: bool,
+    /// Inherit current conversation capability preferences when creating a new conversation.
+    pub inherit_conversation_preferences_on_create: bool,
     /// Timeout before the first chat stream packet in seconds. 0 disables.
     pub chat_stream_first_packet_timeout_secs: u64,
     /// Timeout between chat stream packets in seconds. 0 disables.
@@ -814,6 +816,7 @@ impl Default for AppSettings {
             chat_minimap_enabled: false,
             chat_minimap_style: "faq".to_string(),
             chat_sidebar_collapsed: false,
+            inherit_conversation_preferences_on_create: true,
             chat_stream_first_packet_timeout_secs: 180,
             chat_stream_idle_timeout_secs: 90,
             document_attachment_reading_enabled: false,
@@ -888,6 +891,22 @@ mod app_settings_tests {
         let settings: AppSettings =
             serde_json::from_value(json!({})).expect("settings should default missing fields");
         assert!(!settings.chat_sidebar_collapsed);
+    }
+
+    #[test]
+    fn inherit_conversation_preferences_on_create_defaults_to_enabled_and_roundtrips() {
+        let settings = AppSettings::default();
+        assert!(settings.inherit_conversation_preferences_on_create);
+
+        let settings: AppSettings = serde_json::from_value(json!({
+            "inherit_conversation_preferences_on_create": false
+        }))
+        .expect("settings should deserialize");
+        assert!(!settings.inherit_conversation_preferences_on_create);
+
+        let settings: AppSettings =
+            serde_json::from_value(json!({})).expect("settings should default missing fields");
+        assert!(settings.inherit_conversation_preferences_on_create);
     }
 }
 

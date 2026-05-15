@@ -209,6 +209,75 @@ describe('conversationStore pagination', () => {
     vi.useRealTimers();
   });
 
+  it('filters stale conversation capability ids before sending a message', async () => {
+    vi.useFakeTimers();
+    listenMock.mockResolvedValue(() => {});
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === 'send_message') {
+        return Promise.resolve({
+          ...makeMessage(1),
+          id: 'user-real',
+          role: 'user',
+          content: 'question',
+          provider_id: null,
+          model_id: null,
+        });
+      }
+      if (cmd === 'list_messages_page') {
+        return Promise.resolve(makePage([], false));
+      }
+      if (cmd === 'update_conversation') {
+        return Promise.resolve(makeConversation('conv-1', {
+          enabled_mcp_server_ids: ['mcp-valid'],
+          enabled_knowledge_base_ids: ['kb-valid'],
+          enabled_memory_namespace_ids: ['mem-valid'],
+        }));
+      }
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+    const { useConversationStore } = await import('../conversationStore');
+    const { useKnowledgeStore } = await import('../knowledgeStore');
+    const { useMemoryStore } = await import('../memoryStore');
+    const { useMcpStore } = await import('../mcpStore');
+
+    useKnowledgeStore.setState({
+      bases: [{ id: 'kb-valid', name: 'Visible KB' }] as never[],
+    });
+    useMemoryStore.setState({
+      namespaces: [{ id: 'mem-valid', name: 'Visible Memory' }] as never[],
+    });
+    useMcpStore.setState({
+      servers: [
+        { id: 'mcp-valid', enabled: true, name: 'Visible MCP' },
+        { id: 'mcp-disabled', enabled: false, name: 'Disabled MCP' },
+      ] as never[],
+    });
+    useConversationStore.setState({
+      activeConversationId: 'conv-1',
+      conversations: [makeConversation('conv-1')] as never[],
+      enabledKnowledgeBaseIds: ['kb-valid', 'kb-deleted'],
+      enabledMemoryNamespaceIds: ['mem-valid', 'mem-deleted'],
+      enabledMcpServerIds: ['mcp-valid', 'mcp-disabled', 'mcp-deleted'],
+      messages: [],
+    });
+
+    const pending = useConversationStore.getState().sendMessage('question');
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(600);
+    await pending;
+
+    expect(invokeMock).toHaveBeenCalledWith('send_message', expect.objectContaining({
+      conversationId: 'conv-1',
+      enabledKnowledgeBaseIds: ['kb-valid'],
+      enabledMemoryNamespaceIds: ['mem-valid'],
+      enabledMcpServerIds: ['mcp-valid'],
+    }));
+    expect(useConversationStore.getState().enabledKnowledgeBaseIds).toEqual(['kb-valid']);
+    expect(useConversationStore.getState().enabledMemoryNamespaceIds).toEqual(['mem-valid']);
+    expect(useConversationStore.getState().enabledMcpServerIds).toEqual(['mcp-valid']);
+    vi.useRealTimers();
+  });
+
   it('keeps RAG display state when the streaming assistant resolves from temp to real id', async () => {
     vi.useFakeTimers();
     const listeners = new Map<string, (event: unknown) => void>();
@@ -737,6 +806,135 @@ describe('conversationStore pagination', () => {
         search_enabled: true,
       },
     });
+  });
+
+  it('inherits current capability preferences for newly created conversations by default', async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === 'create_conversation') {
+        return Promise.resolve(makeConversation('conv-new'));
+      }
+
+      if (cmd === 'update_conversation') {
+        return Promise.resolve(makeConversation('conv-new', {
+          search_enabled: true,
+          search_provider_id: 'search-old',
+          thinking_budget: 4096,
+          thinking_level: 'high',
+          enabled_mcp_server_ids: ['mcp-old'],
+          enabled_knowledge_base_ids: ['kb-old'],
+          enabled_memory_namespace_ids: ['mem-old'],
+        }));
+      }
+
+      if (cmd === 'list_messages_page') {
+        return Promise.resolve(makePage([], false));
+      }
+
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+    const { useConversationStore } = await import('../conversationStore');
+
+    useConversationStore.setState({
+      activeConversationId: 'conv-old',
+      conversations: [makeConversation('conv-old')] as never[],
+      searchEnabled: true,
+      searchProviderId: 'search-old',
+      thinkingBudget: 4096,
+      thinkingLevel: 'high',
+      enabledMcpServerIds: ['mcp-old'],
+      enabledKnowledgeBaseIds: ['kb-old'],
+      enabledMemoryNamespaceIds: ['mem-old'],
+    });
+
+    await useConversationStore.getState().createConversation(
+      'new conversation',
+      'model-1',
+      'provider-1',
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('update_conversation', {
+      id: 'conv-new',
+      input: {
+        search_enabled: true,
+        search_provider_id: 'search-old',
+        thinking_budget: 4096,
+        thinking_level: 'high',
+        enabled_mcp_server_ids: ['mcp-old'],
+        enabled_knowledge_base_ids: ['kb-old'],
+        enabled_memory_namespace_ids: ['mem-old'],
+      },
+    });
+    expect(useConversationStore.getState().searchEnabled).toBe(true);
+    expect(useConversationStore.getState().searchProviderId).toBe('search-old');
+    expect(useConversationStore.getState().thinkingBudget).toBe(4096);
+    expect(useConversationStore.getState().thinkingLevel).toBe('high');
+    expect(useConversationStore.getState().enabledMcpServerIds).toEqual(['mcp-old']);
+    expect(useConversationStore.getState().enabledKnowledgeBaseIds).toEqual(['kb-old']);
+    expect(useConversationStore.getState().enabledMemoryNamespaceIds).toEqual(['mem-old']);
+  });
+
+  it('starts newly created conversations with empty capability preferences when inheritance is disabled', async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === 'create_conversation') {
+        return Promise.resolve(makeConversation('conv-new'));
+      }
+
+      if (cmd === 'update_conversation') {
+        return Promise.resolve(makeConversation('conv-new'));
+      }
+
+      if (cmd === 'list_messages_page') {
+        return Promise.resolve(makePage([], false));
+      }
+
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+    const { useConversationStore } = await import('../conversationStore');
+    const { useSettingsStore } = await import('../settingsStore');
+
+    useSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        inherit_conversation_preferences_on_create: false,
+      },
+    }));
+    useConversationStore.setState({
+      activeConversationId: 'conv-old',
+      conversations: [makeConversation('conv-old')] as never[],
+      searchEnabled: true,
+      searchProviderId: 'search-old',
+      thinkingBudget: 4096,
+      thinkingLevel: 'high',
+      enabledMcpServerIds: ['mcp-old'],
+      enabledKnowledgeBaseIds: ['kb-old'],
+      enabledMemoryNamespaceIds: ['mem-old'],
+    });
+
+    await useConversationStore.getState().createConversation(
+      'new conversation',
+      'model-1',
+      'provider-1',
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('update_conversation', {
+      id: 'conv-new',
+      input: {
+        search_enabled: false,
+        search_provider_id: null,
+        thinking_budget: null,
+        thinking_level: null,
+        enabled_mcp_server_ids: [],
+        enabled_knowledge_base_ids: [],
+        enabled_memory_namespace_ids: [],
+      },
+    });
+    expect(useConversationStore.getState().searchEnabled).toBe(false);
+    expect(useConversationStore.getState().searchProviderId).toBeNull();
+    expect(useConversationStore.getState().thinkingBudget).toBeNull();
+    expect(useConversationStore.getState().thinkingLevel).toBeNull();
+    expect(useConversationStore.getState().enabledMcpServerIds).toEqual([]);
+    expect(useConversationStore.getState().enabledKnowledgeBaseIds).toEqual([]);
+    expect(useConversationStore.getState().enabledMemoryNamespaceIds).toEqual([]);
   });
 
   it('persists reasoning level changes separately from legacy thinking budget', async () => {
