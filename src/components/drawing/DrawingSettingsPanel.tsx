@@ -1,4 +1,6 @@
-import { Collapse, Form, Input, InputNumber, Select, Slider, Switch, Typography, theme } from 'antd';
+import { Form, Input, InputNumber, Select, Slider, Switch, Typography, theme } from 'antd';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DrawingReferenceImageFormat, DrawingReferenceImageMode, DrawingSettings, ProviderConfig } from '@/types';
 import {
@@ -26,6 +28,7 @@ interface Props {
 export function DrawingSettingsPanel({ settings, providers, onChange }: Props) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const translateOption = (key: string, fallback: string) => t(key, fallback);
   const modelOptions = getDrawingModelOptions();
   const compatibleProviders = getDrawingProvidersForModel(providers, settings.modelId);
@@ -65,73 +68,109 @@ export function DrawingSettingsPanel({ settings, providers, onChange }: Props) {
       }}
     >
       <Form layout="vertical">
-        <Collapse defaultActiveKey={['basic']} ghost>
-          <Collapse.Panel header={t('drawing.basicSettings', '基础设置')} key="basic">
-            <Form.Item label={t('drawing.model', '模型')}>
-              <Select
-                value={settings.modelId}
-                options={modelOptions}
-                placeholder={t('drawing.selectModel', '选择绘图模型')}
-                onChange={(modelId) => {
-                  const nextProviders = getDrawingProvidersForModel(providers, modelId);
-                  const providerId = nextProviders.some((provider) => provider.id === settings.providerId)
-                    ? settings.providerId
-                    : nextProviders[0]?.id ?? '';
-                  patch({
-                    modelId,
-                    providerId,
-                  });
-                }}
-              />
-            </Form.Item>
-            <Form.Item label={t('drawing.provider', 'Provider')}>
-              <Select
-                value={settings.providerId || undefined}
-                placeholder={t('drawing.selectProvider', '选择服务商')}
-                options={providerOptions}
-                optionLabelProp="label"
-                onChange={(providerId) => patch({ providerId })}
-              />
-            </Form.Item>
-            <Form.Item label={t('drawing.size', '尺寸')}>
-              <Select
-                value={settings.size}
-                options={getDrawingSizeOptions(translateOption)}
-                onChange={(size) => patch({ size })}
-              />
-            </Form.Item>
-            <Form.Item label={t('drawing.quality', '质量')}>
-              <Select
-                value={settings.quality}
-                options={getDrawingQualityOptions(translateOption)}
-                onChange={(quality) => patch({ quality })}
-              />
-            </Form.Item>
-            <Form.Item label={t('drawing.outputFormat', '输出格式')}>
-              <Select
-                value={settings.outputFormat}
-                options={getDrawingOutputFormatOptions(translateOption)}
-                onChange={(outputFormat) => patch({ outputFormat })}
-              />
-            </Form.Item>
-            <Form.Item label={t('drawing.background', '背景')}>
-              <Select
-                value={settings.background}
-                options={backgroundOptions}
-                onChange={(background) => patch({ background })}
-              />
-            </Form.Item>
-            <Form.Item label={t('drawing.batchCount', '批量张数')}>
-              <InputNumber
-                min={1}
-                max={10}
-                value={settings.n}
-                style={{ width: '100%' }}
-                onChange={(n) => patch({ n: n || 1 })}
-              />
-            </Form.Item>
-          </Collapse.Panel>
-          <Collapse.Panel header={t('drawing.advancedSettings', '高级设置')} key="advanced">
+        <Form.Item label={t('drawing.model', '模型')}>
+          <Select
+            value={settings.modelId}
+            options={modelOptions}
+            placeholder={t('drawing.selectModel', '选择绘图模型')}
+            onChange={(modelId) => {
+              const nextProviders = getDrawingProvidersForModel(providers, modelId);
+              const providerId = nextProviders.some((provider) => provider.id === settings.providerId)
+                ? settings.providerId
+                : nextProviders[0]?.id ?? '';
+              patch({
+                modelId,
+                providerId,
+              });
+            }}
+          />
+        </Form.Item>
+        <Form.Item label={t('drawing.provider', 'Provider')}>
+          <Select
+            value={settings.providerId || undefined}
+            placeholder={t('drawing.selectProvider', '选择服务商')}
+            options={providerOptions}
+            optionLabelProp="label"
+            onChange={(providerId) => patch({ providerId })}
+          />
+        </Form.Item>
+        <Form.Item label={t('drawing.size', '尺寸')}>
+          <Select
+            value={settings.size}
+            options={getDrawingSizeOptions(translateOption)}
+            onChange={(size) => patch({ size })}
+          />
+        </Form.Item>
+        <Form.Item label={t('drawing.quality', '质量')}>
+          <Select
+            value={settings.quality}
+            options={getDrawingQualityOptions(translateOption)}
+            onChange={(quality) => patch({ quality })}
+          />
+        </Form.Item>
+        <Form.Item label={t('drawing.outputFormat', '输出格式')}>
+          <Select
+            value={settings.outputFormat}
+            options={getDrawingOutputFormatOptions(translateOption)}
+            onChange={(outputFormat) => patch({ outputFormat })}
+          />
+        </Form.Item>
+        <Form.Item label={t('drawing.background', '背景')}>
+          <Select
+            value={settings.background}
+            options={backgroundOptions}
+            onChange={(background) => patch({ background })}
+          />
+        </Form.Item>
+        <Form.Item label={t('drawing.batchCount', '批量张数')}>
+          <InputNumber
+            min={1}
+            max={10}
+            value={settings.n}
+            style={{ width: '100%' }}
+            onChange={(n) => patch({ n: n || 1 })}
+          />
+        </Form.Item>
+      </Form>
+      <Typography.Text style={{ fontSize: 12, color: token.colorTextSecondary }}>
+        {t('drawing.references', '参考图')}
+      </Typography.Text>
+      <div className="mb-4 mt-2">
+        <DrawingReferenceUploader />
+      </div>
+      <button
+        type="button"
+        onClick={() => setAdvancedOpen((open) => !open)}
+        aria-expanded={advancedOpen}
+        className="mb-3 flex w-full items-center justify-between transition-colors"
+        style={{
+          height: 44,
+          border: 'none',
+          borderTop: `1px solid ${token.colorBorderSecondary}`,
+          background: 'transparent',
+          color: token.colorText,
+          padding: 0,
+          fontSize: 14,
+          fontWeight: 600,
+          textAlign: 'left',
+        }}
+      >
+        <span>{t('drawing.advancedSettings', '高级设置')}</span>
+        <span
+          className="flex items-center justify-center"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            background: token.colorFillAlter,
+            color: token.colorTextSecondary,
+          }}
+        >
+          {advancedOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        </span>
+      </button>
+      {advancedOpen && (
+        <Form layout="vertical">
             <Form.Item label={t('drawing.generationApiPath', '生图接口')}>
               <Input
                 value={settings.generationApiPath}
@@ -191,15 +230,8 @@ export function DrawingSettingsPanel({ settings, providers, onChange }: Props) {
                 </div>
               </Form.Item>
             )}
-          </Collapse.Panel>
-        </Collapse>
-      </Form>
-      <Typography.Text style={{ fontSize: 12, color: token.colorTextSecondary }}>
-        {t('drawing.references', '参考图')}
-      </Typography.Text>
-      <div className="mt-2">
-        <DrawingReferenceUploader />
-      </div>
+        </Form>
+      )}
     </aside>
   );
 }
