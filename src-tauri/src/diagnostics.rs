@@ -32,7 +32,9 @@ impl Write for SharedLogFileWriter {
             .file
             .lock()
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "log file lock poisoned"))?;
-        file.write(buf)
+        let written = file.write(buf)?;
+        file.flush()?;
+        Ok(written)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -105,7 +107,14 @@ pub fn log_process_startup() {
         wayland_display = %env_value("WAYLAND_DISPLAY"),
         display = %env_value("DISPLAY"),
         gdk_backend = %env_value("GDK_BACKEND"),
+        xdg_current_desktop = %env_value("XDG_CURRENT_DESKTOP"),
+        desktop_session = %env_value("DESKTOP_SESSION"),
+        webkit_disable_dmabuf_renderer = %env_value("WEBKIT_DISABLE_DMABUF_RENDERER"),
+        webkit_disable_compositing_mode = %env_value("WEBKIT_DISABLE_COMPOSITING_MODE"),
         aqbot_linux_auto_window = %env_value(LINUX_AUTO_WINDOW_ENV),
+        aqbot_linux_any_thread = %env_value(crate::startup_diagnostics::LINUX_ANY_THREAD_ENV),
+        aqbot_linux_minimal_plugins = %env_value(crate::startup_diagnostics::LINUX_MINIMAL_PLUGINS_ENV),
+        aqbot_enable_devtools = %env_value(crate::startup_diagnostics::ENABLE_DEVTOOLS_ENV),
         "AQBot process startup diagnostics"
     );
 }

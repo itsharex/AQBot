@@ -2,8 +2,11 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react
 import { Copy, TextCursorInput, Bug, Scissors, ClipboardPaste, BoxSelect } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { theme, message } from 'antd';
-import { invoke } from '@tauri-apps/api/core';
 import { useConversationStore } from '@/stores';
+import {
+  loadDevtoolsContextMenuEnabled,
+  openDevtoolsWithDiagnostics,
+} from '@/lib/desktopCapabilities';
 
 /**
  * Global right-click context menu.
@@ -26,6 +29,21 @@ export function GlobalCopyMenu() {
   const selectionRangeRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const activeConversationId = useConversationStore((s) => s.activeConversationId);
   const isDev = import.meta.env.DEV;
+  const [devtoolsEnabled, setDevtoolsEnabled] = useState(isDev);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadDevtoolsContextMenuEnabled(isDev).then((enabled) => {
+      if (!cancelled) {
+        setDevtoolsEnabled(enabled);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDev]);
 
   useEffect(() => {
     // Save textarea selection before Chromium's auto word-selection on right-click
@@ -89,7 +107,7 @@ export function GlobalCopyMenu() {
       if (sel) {
         setHasSelection(true);
         setMenuPos({ x: e.clientX, y: e.clientY });
-      } else if (isDev) {
+      } else if (devtoolsEnabled) {
         setHasSelection(false);
         setMenuPos({ x: e.clientX, y: e.clientY });
       } else {
@@ -109,7 +127,7 @@ export function GlobalCopyMenu() {
       document.removeEventListener('click', dismissHandler);
       document.removeEventListener('scroll', dismissHandler, true);
     };
-  }, [isDev]);
+  }, [devtoolsEnabled]);
 
   const handleCopy = useCallback(() => {
     const text = selectedTextRef.current;
@@ -169,7 +187,7 @@ export function GlobalCopyMenu() {
   }, []);
 
   const handleOpenDevtools = useCallback(() => {
-    void invoke('open_devtools');
+    void openDevtoolsWithDiagnostics();
     setMenuPos(null);
   }, []);
 
@@ -229,7 +247,7 @@ export function GlobalCopyMenu() {
     }
   }
 
-  if (isDev) {
+  if (devtoolsEnabled) {
     items.push({
       key: 'devtools',
       icon: <Bug size={14} />,

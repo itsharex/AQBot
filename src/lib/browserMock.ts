@@ -1534,7 +1534,10 @@ export async function handleCommand<T>(cmd: string, args?: Record<string, unknow
         { key: 'protocol_handler', supported: false },
         { key: 'mini_window', supported: false },
         { key: 'notification', supported: 'Notification' in globalThis },
+        { key: 'devtools_context_menu', supported: false },
       ] as T;
+    case 'open_devtools':
+      return undefined as T;
     case 'get_window_state':
       return { width: globalThis.innerWidth ?? 1280, height: globalThis.innerHeight ?? 800, focused: true, fullscreen: false } as T;
     case 'send_desktop_notification': {

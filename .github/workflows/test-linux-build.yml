@@ -98,6 +98,7 @@ jobs:
         run: pnpm tauri build --target x86_64-unknown-linux-gnu --bundles appimage,rpm,deb
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
+          AQBOT_TEST_BUILD: '1'
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -112,13 +113,19 @@ jobs:
             If AQBot still opens as a blank window, start it with:
 
             ```bash
-            AQBOT_LOG_FILE="$HOME/aqbot-0.0.76.log" RUST_LOG=debug ./AQBot_0.0.76_amd64.AppImage
+            AQBOT_LOG_FILE="$HOME/aqbot-${{ github.ref_name }}.log" RUST_LOG=debug AQBOT_ENABLE_DEVTOOLS=1 ./AQBot_0.0.76_amd64.AppImage
             ```
 
             For the RPM install:
 
             ```bash
-            AQBOT_LOG_FILE="$HOME/aqbot-0.0.76.log" RUST_LOG=debug AQBot
+            AQBOT_LOG_FILE="$HOME/aqbot-${{ github.ref_name }}-rpm.log" RUST_LOG=debug AQBOT_ENABLE_DEVTOOLS=1 AQBot
+            ```
+
+            If the log still stops around `builder.build(context)`, run the minimal-plugin diagnostic path:
+
+            ```bash
+            AQBOT_LOG_FILE="$HOME/aqbot-${{ github.ref_name }}-minimal.log" RUST_LOG=debug AQBOT_ENABLE_DEVTOOLS=1 AQBOT_LINUX_MINIMAL_PLUGINS=1 ./AQBot_0.0.76_amd64.AppImage
             ```
 
             Please attach the generated log file back to issue #83.

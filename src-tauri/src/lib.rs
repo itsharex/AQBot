@@ -46,6 +46,7 @@ pub mod knowledge_index_scheduler;
 #[cfg(any(target_os = "linux", test))]
 mod linux_webkit;
 mod paths;
+mod startup_diagnostics;
 mod tray;
 mod window_lifecycle;
 mod window_state;
@@ -59,290 +60,410 @@ pub fn run() {
     diagnostics::init_tracing();
     diagnostics::install_panic_hook();
     diagnostics::log_process_startup();
+    startup_diagnostics::log_startup_env_switches();
 
     #[cfg(target_os = "linux")]
     linux_webkit::apply_startup_workarounds();
 
     #[allow(unused_mut)]
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            window_lifecycle::restore_main_window(app);
-        }))
-        .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_updater::Builder::new().build());
+    let mut builder = {
+        tracing::info!("Creating Tauri application builder");
+        let builder = tauri::Builder::default();
+        tracing::info!("Created Tauri application builder");
+        builder
+    };
+
+    let minimal_plugins = {
+        #[cfg(target_os = "linux")]
+        {
+            startup_diagnostics::linux_minimal_plugins_enabled()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            false
+        }
+    };
+
+    if minimal_plugins {
+        tracing::warn!(
+            env = startup_diagnostics::LINUX_MINIMAL_PLUGINS_ENV,
+            "Skipping nonessential Tauri plugins for Linux startup diagnostics"
+        );
+    } else {
+        builder = startup_diagnostics::register_plugin(
+            builder,
+            "single-instance",
+            tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                tracing::info!("AQBot single-instance callback reached");
+                window_lifecycle::restore_main_window(app);
+            }),
+        );
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_single_instance",
+        ));
+
+        builder = startup_diagnostics::register_plugin(
+            builder,
+            "deep-link",
+            tauri_plugin_deep_link::init(),
+        );
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_deep_link",
+        ));
+
+        builder =
+            startup_diagnostics::register_plugin(builder, "opener", tauri_plugin_opener::init());
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_opener",
+        ));
+
+        builder =
+            startup_diagnostics::register_plugin(builder, "dialog", tauri_plugin_dialog::init());
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_dialog",
+        ));
+
+        builder = startup_diagnostics::register_plugin(builder, "fs", tauri_plugin_fs::init());
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_fs",
+        ));
+
+        builder = startup_diagnostics::register_plugin(
+            builder,
+            "autostart",
+            tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None),
+        );
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_autostart",
+        ));
+
+        builder = startup_diagnostics::register_plugin(
+            builder,
+            "global-shortcut",
+            tauri_plugin_global_shortcut::Builder::new().build(),
+        );
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_global_shortcut",
+        ));
+
+        builder =
+            startup_diagnostics::register_plugin(builder, "process", tauri_plugin_process::init());
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_process",
+        ));
+
+        builder = startup_diagnostics::register_plugin(
+            builder,
+            "clipboard-manager",
+            tauri_plugin_clipboard_manager::init(),
+        );
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_clipboard_manager",
+        ));
+
+        builder = startup_diagnostics::register_plugin(
+            builder,
+            "updater",
+            tauri_plugin_updater::Builder::new().build(),
+        );
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_updater",
+        ));
+    }
 
     #[cfg(debug_assertions)]
-    {
-        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    if !minimal_plugins {
+        builder = startup_diagnostics::register_plugin(
+            builder,
+            "mcp-bridge",
+            tauri_plugin_mcp_bridge::init(),
+        );
+        builder = builder.plugin(startup_diagnostics::diagnostic_marker_plugin(
+            "aqbot_diag_after_mcp_bridge",
+        ));
+    }
+
+    #[cfg(target_os = "linux")]
+    if startup_diagnostics::linux_any_thread_enabled() {
+        tracing::warn!(
+            env = startup_diagnostics::LINUX_ANY_THREAD_ENV,
+            "Using Tauri any_thread runtime path for Linux startup diagnostics"
+        );
+        builder = builder.any_thread();
     }
 
     #[cfg(target_os = "linux")]
     let context = {
+        tracing::info!("Generating Tauri context");
         let mut context = tauri::generate_context!();
+        tracing::info!("Generated Tauri context");
         linux_webkit::configure_startup_window_creation(&mut context);
+        tracing::info!("Configured Linux startup window creation");
         context
     };
     #[cfg(not(target_os = "linux"))]
-    let context = tauri::generate_context!();
+    let context = {
+        tracing::info!("Generating Tauri context");
+        let context = tauri::generate_context!();
+        tracing::info!("Generated Tauri context");
+        context
+    };
 
-    tracing::info!("Building Tauri application");
-    let build_result = builder
-        .invoke_handler(tauri::generate_handler![
-            // providers
-            commands::providers::list_providers,
-            commands::providers::create_provider,
-            commands::providers::import_provider_from_deep_link,
-            commands::providers::update_provider,
-            commands::providers::delete_provider,
-            commands::providers::toggle_provider,
-            commands::providers::add_provider_key,
-            commands::providers::update_provider_key,
-            commands::providers::delete_provider_key,
-            commands::providers::toggle_provider_key,
-            commands::providers::get_decrypted_provider_key,
-            commands::providers::validate_provider_key,
-            commands::providers::save_models,
-            commands::providers::toggle_model,
-            commands::providers::update_model_params,
-            commands::providers::fetch_remote_models,
-            commands::providers::test_model,
-            commands::providers::reorder_providers,
-            // drawing
-            commands::drawing::list_drawing_generations,
-            commands::drawing::upload_drawing_reference,
-            commands::drawing::generate_drawing_images,
-            commands::drawing::edit_drawing_image,
-            commands::drawing::edit_drawing_image_with_mask,
-            commands::drawing::delete_drawing_generation,
-            // conversations
-            commands::conversations::list_conversations,
-            commands::conversations::create_conversation,
-            commands::conversations::update_conversation,
-            commands::conversations::delete_conversation,
-            commands::conversations::branch_conversation,
-            commands::conversations::search_conversations,
-            commands::conversations::send_message,
-            commands::conversations::toggle_pin_conversation,
-            commands::conversations::toggle_archive_conversation,
-            commands::conversations::list_archived_conversations,
-            commands::conversations::regenerate_message,
-            commands::conversations::regenerate_with_model,
-            commands::conversations::cancel_stream,
-            commands::conversations::list_message_versions,
-            commands::conversations::switch_message_version,
-            commands::conversations::delete_message_group,
-            commands::conversations::send_system_message,
-            commands::conversations::compress_context,
-            commands::conversations::get_compression_summary,
-            commands::conversations::delete_compression,
-            commands::conversations::regenerate_conversation_title,
-            // conversation categories
-            commands::conversation_categories::list_conversation_categories,
-            commands::conversation_categories::create_conversation_category,
-            commands::conversation_categories::update_conversation_category,
-            commands::conversation_categories::delete_conversation_category,
-            commands::conversation_categories::reorder_conversation_categories,
-            commands::conversation_categories::set_conversation_category_collapsed,
-            // settings
-            commands::settings::get_settings,
-            commands::settings::save_settings,
-            // gateway
-            commands::gateway::list_gateway_keys,
-            commands::gateway::create_gateway_key,
-            commands::gateway::delete_gateway_key,
-            commands::gateway::toggle_gateway_key,
-            commands::gateway::decrypt_gateway_key,
-            commands::gateway::get_gateway_metrics,
-            commands::gateway::start_gateway,
-            commands::gateway::stop_gateway,
-            commands::gateway::get_gateway_status,
-            commands::gateway::get_gateway_usage_by_key,
-            commands::gateway::get_gateway_usage_by_provider,
-            commands::gateway::get_gateway_usage_by_day,
-            commands::gateway::get_connected_programs,
-            commands::gateway::get_gateway_diagnostics,
-            commands::gateway::get_program_policies,
-            commands::gateway::save_program_policy,
-            commands::gateway::delete_program_policy,
-            commands::gateway::list_gateway_templates,
-            commands::gateway::copy_gateway_template,
-            commands::gateway::list_gateway_request_logs,
-            commands::gateway::clear_gateway_request_logs,
-            commands::gateway::get_all_cli_tool_statuses,
-            commands::gateway::connect_cli_tool,
-            commands::gateway::disconnect_cli_tool,
-            commands::gateway::generate_self_signed_cert,
-            // messages
-            commands::messages::list_messages,
-            commands::messages::list_messages_page,
-            commands::messages::delete_message,
-            commands::messages::update_message_content,
-            commands::messages::clear_conversation_messages,
-            commands::messages::export_conversation,
-            commands::messages::get_conversation_stats,
-            // artifacts
-            commands::artifacts::list_artifacts,
-            commands::artifacts::create_artifact,
-            commands::artifacts::update_artifact,
-            commands::artifacts::delete_artifact,
-            // context sources
-            commands::context_sources::list_context_sources,
-            commands::context_sources::add_context_source,
-            commands::context_sources::remove_context_source,
-            commands::context_sources::toggle_context_source,
-            // branches & workspace
-            commands::branches::list_branches,
-            commands::branches::fork_conversation,
-            commands::branches::compare_branches,
-            commands::branches::get_workspace_snapshot,
-            commands::branches::update_workspace_snapshot,
-            // search providers
-            commands::search::list_search_providers,
-            commands::search::create_search_provider,
-            commands::search::update_search_provider,
-            commands::search::delete_search_provider,
-            commands::search::test_search_provider,
-            commands::search::execute_search,
-            // mcp servers
-            commands::mcp::list_mcp_servers,
-            commands::mcp::create_mcp_server,
-            commands::mcp::update_mcp_server,
-            commands::mcp::delete_mcp_server,
-            commands::mcp::test_mcp_server,
-            commands::mcp::list_mcp_tools,
-            commands::mcp::discover_mcp_tools,
-            commands::mcp::list_tool_executions,
-            // knowledge
-            commands::knowledge::list_knowledge_bases,
-            commands::knowledge::create_knowledge_base,
-            commands::knowledge::update_knowledge_base,
-            commands::knowledge::delete_knowledge_base,
-            commands::knowledge::reorder_knowledge_bases,
-            commands::knowledge::list_knowledge_documents,
-            commands::knowledge::add_knowledge_document,
-            commands::knowledge::delete_knowledge_document,
-            commands::knowledge::search_knowledge_base,
-            commands::knowledge::rebuild_knowledge_index,
-            commands::knowledge::clear_knowledge_index,
-            commands::knowledge::list_knowledge_document_chunks,
-            commands::knowledge::delete_knowledge_chunk,
-            commands::knowledge::update_knowledge_chunk,
-            commands::knowledge::reindex_knowledge_chunk,
-            commands::knowledge::rebuild_knowledge_document,
-            commands::knowledge::add_knowledge_chunk,
-            // memory
-            commands::memory::list_memory_namespaces,
-            commands::memory::create_memory_namespace,
-            commands::memory::delete_memory_namespace,
-            commands::memory::update_memory_namespace,
-            commands::memory::list_memory_items,
-            commands::memory::add_memory_item,
-            commands::memory::delete_memory_item,
-            commands::memory::update_memory_item,
-            commands::memory::search_memory,
-            commands::memory::rebuild_memory_index,
-            commands::memory::clear_memory_index,
-            commands::memory::reindex_memory_item,
-            commands::memory::reorder_memory_namespaces,
-            // backup
-            commands::backup::list_backups,
-            commands::backup::create_backup,
-            commands::backup::restore_backup,
-            commands::backup::delete_backup,
-            commands::backup::batch_delete_backups,
-            commands::backup::get_backup_settings,
-            commands::backup::update_backup_settings,
-            // webdav
-            commands::webdav::get_webdav_config,
-            commands::webdav::save_webdav_config,
-            commands::webdav::webdav_check_connection,
-            commands::webdav::webdav_backup,
-            commands::webdav::webdav_list_backups,
-            commands::webdav::webdav_restore,
-            commands::webdav::webdav_delete_backup,
-            commands::webdav::get_webdav_sync_status,
-            commands::webdav::restart_webdav_sync,
-            // s3
-            commands::s3::get_s3_config,
-            commands::s3::save_s3_config,
-            commands::s3::s3_check_connection,
-            commands::s3::s3_backup,
-            commands::s3::s3_list_backups,
-            commands::s3::s3_restore,
-            commands::s3::s3_delete_backup,
-            commands::s3::get_s3_sync_status,
-            commands::s3::restart_s3_sync,
-            // desktop
-            commands::desktop::get_desktop_capabilities,
-            commands::desktop::send_desktop_notification,
-            commands::desktop::get_window_state,
-            commands::desktop::set_always_on_top,
-            commands::desktop::set_close_to_tray,
-            commands::desktop::set_release_webview_on_tray,
-            commands::desktop::force_quit,
-            commands::desktop::apply_startup_settings,
-            commands::desktop::test_proxy,
-            commands::desktop::open_devtools,
-            commands::desktop::write_diagnostic_log,
-            commands::desktop::list_system_fonts,
-            commands::desktop::minimize_window,
-            commands::desktop::toggle_maximize_window,
-            // files
-            commands::files::upload_file,
-            commands::files::download_file,
-            commands::files::fetch_remote_image,
-            commands::files::list_files,
-            commands::files::delete_file,
-            // files page
-            commands::files_page::list_files_page_entries,
-            commands::files_page::open_files_page_entry,
-            commands::files_page::reveal_files_page_entry,
-            commands::files_page::cleanup_missing_files_page_entry,
-            commands::files_page::check_attachment_exists,
-            commands::files_page::resolve_attachment_path,
-            commands::files_page::read_attachment_preview,
-            commands::files_page::reveal_attachment_file,
-            commands::files_page::save_avatar_file,
-            commands::files_page::open_attachment_file,
-            // storage
-            commands::storage::get_storage_inventory,
-            commands::storage::open_storage_directory,
-            commands::storage::validate_documents_root,
-            commands::storage::change_documents_root,
-            commands::storage::reset_documents_root,
-            // agent
-            commands::agent::agent_query,
-            commands::agent::agent_cancel,
-            commands::agent::agent_update_session,
-            commands::agent::agent_get_session,
-            commands::agent::agent_ensure_workspace,
-            commands::agent::agent_approve,
-            commands::agent::agent_respond_ask,
-            commands::agent::agent_backup_and_clear_sdk_context,
-            commands::agent::agent_restore_sdk_context_from_backup,
-            // skills
-            commands::skills::list_skills,
-            commands::skills::get_skill,
-            commands::skills::toggle_skill,
-            commands::skills::install_skill,
-            commands::skills::uninstall_skill,
-            commands::skills::uninstall_skill_group,
-            commands::skills::open_skills_dir,
-            commands::skills::open_skill_dir,
-            commands::skills::search_marketplace,
-            commands::skills::check_skill_updates,
-        ])
-        .setup(|app| {
+    let startup_phase = startup_diagnostics::StartupPhase::new("attaching invoke handler");
+    let watchdog = startup_diagnostics::start_linux_startup_watchdog(startup_phase.clone());
+
+    tracing::info!("Attaching Tauri invoke handler");
+    startup_phase.set("attaching invoke handler");
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        // providers
+        commands::providers::list_providers,
+        commands::providers::create_provider,
+        commands::providers::import_provider_from_deep_link,
+        commands::providers::update_provider,
+        commands::providers::delete_provider,
+        commands::providers::toggle_provider,
+        commands::providers::add_provider_key,
+        commands::providers::update_provider_key,
+        commands::providers::delete_provider_key,
+        commands::providers::toggle_provider_key,
+        commands::providers::get_decrypted_provider_key,
+        commands::providers::validate_provider_key,
+        commands::providers::save_models,
+        commands::providers::toggle_model,
+        commands::providers::update_model_params,
+        commands::providers::fetch_remote_models,
+        commands::providers::test_model,
+        commands::providers::reorder_providers,
+        // drawing
+        commands::drawing::list_drawing_generations,
+        commands::drawing::upload_drawing_reference,
+        commands::drawing::generate_drawing_images,
+        commands::drawing::edit_drawing_image,
+        commands::drawing::edit_drawing_image_with_mask,
+        commands::drawing::delete_drawing_generation,
+        // conversations
+        commands::conversations::list_conversations,
+        commands::conversations::create_conversation,
+        commands::conversations::update_conversation,
+        commands::conversations::delete_conversation,
+        commands::conversations::branch_conversation,
+        commands::conversations::search_conversations,
+        commands::conversations::send_message,
+        commands::conversations::toggle_pin_conversation,
+        commands::conversations::toggle_archive_conversation,
+        commands::conversations::list_archived_conversations,
+        commands::conversations::regenerate_message,
+        commands::conversations::regenerate_with_model,
+        commands::conversations::cancel_stream,
+        commands::conversations::list_message_versions,
+        commands::conversations::switch_message_version,
+        commands::conversations::delete_message_group,
+        commands::conversations::send_system_message,
+        commands::conversations::compress_context,
+        commands::conversations::get_compression_summary,
+        commands::conversations::delete_compression,
+        commands::conversations::regenerate_conversation_title,
+        // conversation categories
+        commands::conversation_categories::list_conversation_categories,
+        commands::conversation_categories::create_conversation_category,
+        commands::conversation_categories::update_conversation_category,
+        commands::conversation_categories::delete_conversation_category,
+        commands::conversation_categories::reorder_conversation_categories,
+        commands::conversation_categories::set_conversation_category_collapsed,
+        // settings
+        commands::settings::get_settings,
+        commands::settings::save_settings,
+        // gateway
+        commands::gateway::list_gateway_keys,
+        commands::gateway::create_gateway_key,
+        commands::gateway::delete_gateway_key,
+        commands::gateway::toggle_gateway_key,
+        commands::gateway::decrypt_gateway_key,
+        commands::gateway::get_gateway_metrics,
+        commands::gateway::start_gateway,
+        commands::gateway::stop_gateway,
+        commands::gateway::get_gateway_status,
+        commands::gateway::get_gateway_usage_by_key,
+        commands::gateway::get_gateway_usage_by_provider,
+        commands::gateway::get_gateway_usage_by_day,
+        commands::gateway::get_connected_programs,
+        commands::gateway::get_gateway_diagnostics,
+        commands::gateway::get_program_policies,
+        commands::gateway::save_program_policy,
+        commands::gateway::delete_program_policy,
+        commands::gateway::list_gateway_templates,
+        commands::gateway::copy_gateway_template,
+        commands::gateway::list_gateway_request_logs,
+        commands::gateway::clear_gateway_request_logs,
+        commands::gateway::get_all_cli_tool_statuses,
+        commands::gateway::connect_cli_tool,
+        commands::gateway::disconnect_cli_tool,
+        commands::gateway::generate_self_signed_cert,
+        // messages
+        commands::messages::list_messages,
+        commands::messages::list_messages_page,
+        commands::messages::delete_message,
+        commands::messages::update_message_content,
+        commands::messages::clear_conversation_messages,
+        commands::messages::export_conversation,
+        commands::messages::get_conversation_stats,
+        // artifacts
+        commands::artifacts::list_artifacts,
+        commands::artifacts::create_artifact,
+        commands::artifacts::update_artifact,
+        commands::artifacts::delete_artifact,
+        // context sources
+        commands::context_sources::list_context_sources,
+        commands::context_sources::add_context_source,
+        commands::context_sources::remove_context_source,
+        commands::context_sources::toggle_context_source,
+        // branches & workspace
+        commands::branches::list_branches,
+        commands::branches::fork_conversation,
+        commands::branches::compare_branches,
+        commands::branches::get_workspace_snapshot,
+        commands::branches::update_workspace_snapshot,
+        // search providers
+        commands::search::list_search_providers,
+        commands::search::create_search_provider,
+        commands::search::update_search_provider,
+        commands::search::delete_search_provider,
+        commands::search::test_search_provider,
+        commands::search::execute_search,
+        // mcp servers
+        commands::mcp::list_mcp_servers,
+        commands::mcp::create_mcp_server,
+        commands::mcp::update_mcp_server,
+        commands::mcp::delete_mcp_server,
+        commands::mcp::test_mcp_server,
+        commands::mcp::list_mcp_tools,
+        commands::mcp::discover_mcp_tools,
+        commands::mcp::list_tool_executions,
+        // knowledge
+        commands::knowledge::list_knowledge_bases,
+        commands::knowledge::create_knowledge_base,
+        commands::knowledge::update_knowledge_base,
+        commands::knowledge::delete_knowledge_base,
+        commands::knowledge::reorder_knowledge_bases,
+        commands::knowledge::list_knowledge_documents,
+        commands::knowledge::add_knowledge_document,
+        commands::knowledge::delete_knowledge_document,
+        commands::knowledge::search_knowledge_base,
+        commands::knowledge::rebuild_knowledge_index,
+        commands::knowledge::clear_knowledge_index,
+        commands::knowledge::list_knowledge_document_chunks,
+        commands::knowledge::delete_knowledge_chunk,
+        commands::knowledge::update_knowledge_chunk,
+        commands::knowledge::reindex_knowledge_chunk,
+        commands::knowledge::rebuild_knowledge_document,
+        commands::knowledge::add_knowledge_chunk,
+        // memory
+        commands::memory::list_memory_namespaces,
+        commands::memory::create_memory_namespace,
+        commands::memory::delete_memory_namespace,
+        commands::memory::update_memory_namespace,
+        commands::memory::list_memory_items,
+        commands::memory::add_memory_item,
+        commands::memory::delete_memory_item,
+        commands::memory::update_memory_item,
+        commands::memory::search_memory,
+        commands::memory::rebuild_memory_index,
+        commands::memory::clear_memory_index,
+        commands::memory::reindex_memory_item,
+        commands::memory::reorder_memory_namespaces,
+        // backup
+        commands::backup::list_backups,
+        commands::backup::create_backup,
+        commands::backup::restore_backup,
+        commands::backup::delete_backup,
+        commands::backup::batch_delete_backups,
+        commands::backup::get_backup_settings,
+        commands::backup::update_backup_settings,
+        // webdav
+        commands::webdav::get_webdav_config,
+        commands::webdav::save_webdav_config,
+        commands::webdav::webdav_check_connection,
+        commands::webdav::webdav_backup,
+        commands::webdav::webdav_list_backups,
+        commands::webdav::webdav_restore,
+        commands::webdav::webdav_delete_backup,
+        commands::webdav::get_webdav_sync_status,
+        commands::webdav::restart_webdav_sync,
+        // s3
+        commands::s3::get_s3_config,
+        commands::s3::save_s3_config,
+        commands::s3::s3_check_connection,
+        commands::s3::s3_backup,
+        commands::s3::s3_list_backups,
+        commands::s3::s3_restore,
+        commands::s3::s3_delete_backup,
+        commands::s3::get_s3_sync_status,
+        commands::s3::restart_s3_sync,
+        // desktop
+        commands::desktop::get_desktop_capabilities,
+        commands::desktop::send_desktop_notification,
+        commands::desktop::get_window_state,
+        commands::desktop::set_always_on_top,
+        commands::desktop::set_close_to_tray,
+        commands::desktop::set_release_webview_on_tray,
+        commands::desktop::force_quit,
+        commands::desktop::apply_startup_settings,
+        commands::desktop::test_proxy,
+        commands::desktop::open_devtools,
+        commands::desktop::write_diagnostic_log,
+        commands::desktop::list_system_fonts,
+        commands::desktop::minimize_window,
+        commands::desktop::toggle_maximize_window,
+        // files
+        commands::files::upload_file,
+        commands::files::download_file,
+        commands::files::fetch_remote_image,
+        commands::files::list_files,
+        commands::files::delete_file,
+        // files page
+        commands::files_page::list_files_page_entries,
+        commands::files_page::open_files_page_entry,
+        commands::files_page::reveal_files_page_entry,
+        commands::files_page::cleanup_missing_files_page_entry,
+        commands::files_page::check_attachment_exists,
+        commands::files_page::resolve_attachment_path,
+        commands::files_page::read_attachment_preview,
+        commands::files_page::reveal_attachment_file,
+        commands::files_page::save_avatar_file,
+        commands::files_page::open_attachment_file,
+        // storage
+        commands::storage::get_storage_inventory,
+        commands::storage::open_storage_directory,
+        commands::storage::validate_documents_root,
+        commands::storage::change_documents_root,
+        commands::storage::reset_documents_root,
+        // agent
+        commands::agent::agent_query,
+        commands::agent::agent_cancel,
+        commands::agent::agent_update_session,
+        commands::agent::agent_get_session,
+        commands::agent::agent_ensure_workspace,
+        commands::agent::agent_approve,
+        commands::agent::agent_respond_ask,
+        commands::agent::agent_backup_and_clear_sdk_context,
+        commands::agent::agent_restore_sdk_context_from_backup,
+        // skills
+        commands::skills::list_skills,
+        commands::skills::get_skill,
+        commands::skills::toggle_skill,
+        commands::skills::install_skill,
+        commands::skills::uninstall_skill,
+        commands::skills::uninstall_skill_group,
+        commands::skills::open_skills_dir,
+        commands::skills::open_skill_dir,
+        commands::skills::search_marketplace,
+        commands::skills::check_skill_updates,
+    ]);
+    tracing::info!("Attached Tauri invoke handler");
+
+    tracing::info!("Attaching Tauri setup handler");
+    startup_phase.set("attaching setup handler");
+    let builder = builder.setup(|app| {
             tracing::info!("AQBot setup closure entered");
 
             // Force overlay (auto-hide) scrollbar style on macOS.
@@ -691,62 +812,74 @@ pub fn run() {
             }
 
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if window.label() == "main" {
-                match event {
-                    tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_) => {
-                        let app = window.app_handle();
-                        let state = app.state::<AppState>();
-                        let maximized = window.is_maximized().unwrap_or(false);
-                        let fullscreen = window.is_fullscreen().unwrap_or(false);
-                        let scale_factor = window.scale_factor().unwrap_or(1.0);
+        });
+    tracing::info!("Attached Tauri setup handler");
 
-                        // Load previous state to preserve non-maximized geometry
-                        let prev = window_state::load_window_state(&state.app_data_dir);
+    tracing::info!("Attaching Tauri window event handler");
+    startup_phase.set("attaching window event handler");
+    let builder = builder.on_window_event(|window, event| {
+        if window.label() == "main" {
+            match event {
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_) => {
+                    let app = window.app_handle();
+                    let state = app.state::<AppState>();
+                    let maximized = window.is_maximized().unwrap_or(false);
+                    let fullscreen = window.is_fullscreen().unwrap_or(false);
+                    let scale_factor = window.scale_factor().unwrap_or(1.0);
 
-                        if maximized || fullscreen {
-                            // Only flip flags; keep the last normal geometry
-                            if let Some(mut prev) = prev {
-                                prev.maximized = maximized;
-                                prev.fullscreen = fullscreen;
-                                let _ = window_state::save_window_state(&state.app_data_dir, prev);
-                            }
-                        } else if let (Ok(size), Ok(pos)) = (window.inner_size(), window.outer_position()) {
-                            let logical_w = size.width as f64 / scale_factor;
-                            let logical_h = size.height as f64 / scale_factor;
-                            let logical_x = pos.x as f64 / scale_factor;
-                            let logical_y = pos.y as f64 / scale_factor;
-                            let _ = window_state::save_window_state(
-                                &state.app_data_dir,
-                                window_state::PersistedWindowState {
-                                    width: logical_w,
-                                    height: logical_h,
-                                    maximized: false,
-                                    fullscreen: false,
-                                    x: Some(logical_x),
-                                    y: Some(logical_y),
-                                },
-                            );
+                    // Load previous state to preserve non-maximized geometry
+                    let prev = window_state::load_window_state(&state.app_data_dir);
+
+                    if maximized || fullscreen {
+                        // Only flip flags; keep the last normal geometry
+                        if let Some(mut prev) = prev {
+                            prev.maximized = maximized;
+                            prev.fullscreen = fullscreen;
+                            let _ = window_state::save_window_state(&state.app_data_dir, prev);
                         }
+                    } else if let (Ok(size), Ok(pos)) =
+                        (window.inner_size(), window.outer_position())
+                    {
+                        let logical_w = size.width as f64 / scale_factor;
+                        let logical_h = size.height as f64 / scale_factor;
+                        let logical_x = pos.x as f64 / scale_factor;
+                        let logical_y = pos.y as f64 / scale_factor;
+                        let _ = window_state::save_window_state(
+                            &state.app_data_dir,
+                            window_state::PersistedWindowState {
+                                width: logical_w,
+                                height: logical_h,
+                                maximized: false,
+                                fullscreen: false,
+                                x: Some(logical_x),
+                                y: Some(logical_y),
+                            },
+                        );
                     }
-                    tauri::WindowEvent::CloseRequested { api, .. } => {
-                        let app = window.app_handle();
-                        let state = app.state::<AppState>();
-                        if state.close_to_tray.load(Ordering::Relaxed) {
-                            let _ = window_lifecycle::release_main_window_to_tray(window);
-                            api.prevent_close();
-                        } else {
-                            // Ask frontend for confirmation before quitting
-                            api.prevent_close();
-                            let _ = app.emit("app-close-requested", ());
-                        }
-                    }
-                    _ => {}
                 }
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let app = window.app_handle();
+                    let state = app.state::<AppState>();
+                    if state.close_to_tray.load(Ordering::Relaxed) {
+                        let _ = window_lifecycle::release_main_window_to_tray(window);
+                        api.prevent_close();
+                    } else {
+                        // Ask frontend for confirmation before quitting
+                        api.prevent_close();
+                        let _ = app.emit("app-close-requested", ());
+                    }
+                }
+                _ => {}
             }
-        })
-        .build(context);
+        }
+    });
+    tracing::info!("Attached Tauri window event handler");
+
+    tracing::info!("Building Tauri application");
+    startup_phase.set("inside builder.build(context)");
+    let build_result = builder.build(context);
+    startup_phase.set("builder.build(context) returned");
+    watchdog.stop();
 
     let app = match build_result {
         Ok(app) => {
@@ -755,7 +888,14 @@ pub fn run() {
         }
         Err(e) => {
             let error_msg = e.to_string();
-            tracing::error!("Failed to build Tauri application: {}", error_msg);
+            let error_chain = startup_diagnostics::format_error_chain(&e);
+            let backtrace = std::backtrace::Backtrace::force_capture();
+            tracing::error!(
+                error = %error_msg,
+                error_chain = %error_chain,
+                backtrace = %backtrace,
+                "Failed to build Tauri application"
+            );
 
             #[cfg(target_os = "windows")]
             {
@@ -779,6 +919,12 @@ pub fn run() {
                     );
                 }
             }
+
+            #[cfg(target_os = "linux")]
+            diagnostics::show_linux_startup_error_dialog(&format!(
+                "AQBot 启动失败：{}\n\n请使用 AQBOT_LOG_FILE 和 RUST_LOG=debug 启动后回传日志。",
+                error_chain
+            ));
 
             std::process::exit(1);
         }

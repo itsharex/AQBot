@@ -141,7 +141,7 @@ export type CliToolInfo = {
   connectedProtocol: QuickConnectProtocol | null;
 };
 
-export type DesktopCapabilityKey = 'tray' | 'global_shortcut' | 'protocol_handler' | 'mini_window' | 'artifact_window' | 'notification';
+export type DesktopCapabilityKey = 'tray' | 'global_shortcut' | 'protocol_handler' | 'mini_window' | 'artifact_window' | 'notification' | 'devtools_context_menu';
 
 export type DesktopCapability = {
   key: DesktopCapabilityKey;

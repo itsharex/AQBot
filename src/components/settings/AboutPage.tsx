@@ -2,10 +2,14 @@ import { Button, Divider, Typography, InputNumber } from 'antd';
 import { Github, Globe, RefreshCw, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
-import { isTauri, invoke } from '@/lib/invoke';
+import { isTauri } from '@/lib/invoke';
 import logoUrl from '@/assets/image/logo.png';
 import { useSettingsStore } from '@/stores';
 import { useUpdateChecker } from '@/hooks/useUpdateChecker';
+import {
+  loadDevtoolsContextMenuEnabled,
+  openDevtoolsWithDiagnostics,
+} from '@/lib/desktopCapabilities';
 import { SettingsGroup } from './SettingsGroup';
 
 const { Text } = Typography;
@@ -14,6 +18,7 @@ export function AboutPage() {
   const { t } = useTranslation();
   const [checking, setChecking] = useState(false);
   const [appVersion, setAppVersion] = useState('...');
+  const [devtoolsEnabled, setDevtoolsEnabled] = useState(import.meta.env.DEV);
   const { checkForUpdate } = useUpdateChecker();
   const updateCheckInterval = useSettingsStore((s) => s.settings.update_check_interval ?? 60);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
@@ -23,6 +28,7 @@ export function AboutPage() {
       import('@tauri-apps/api/app').then(({ getVersion }) => {
         getVersion().then(v => setAppVersion(v));
       });
+      void loadDevtoolsContextMenuEnabled(import.meta.env.DEV).then(setDevtoolsEnabled);
     }
   }, []);
 
@@ -39,9 +45,7 @@ export function AboutPage() {
 
   const handleOpenDevTools = useCallback(async () => {
     if (isTauri()) {
-      try {
-        await invoke('open_devtools');
-      } catch { /* ignore */ }
+      await openDevtoolsWithDiagnostics();
     }
   }, []);
 
@@ -124,7 +128,7 @@ export function AboutPage() {
             addonAfter={t('settings.minutes')}
           />
         </div>
-        {isTauri() && (
+        {isTauri() && devtoolsEnabled && (
           <>
             <Divider style={{ margin: '4px 0' }} />
             <div style={rowStyle} className="flex items-center justify-between">

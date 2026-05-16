@@ -74,7 +74,11 @@ pub async fn get_desktop_capabilities() -> Result<serde_json::Value, String> {
         { "key": "global_shortcut", "supported": true },
         { "key": "protocol_handler", "supported": true },
         { "key": "mini_window", "supported": true },
-        { "key": "notification", "supported": true }
+        { "key": "notification", "supported": true },
+        {
+            "key": "devtools_context_menu",
+            "supported": crate::startup_diagnostics::devtools_context_menu_enabled()
+        }
     ]))
 }
 
@@ -96,6 +100,11 @@ pub async fn get_window_state() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn open_devtools(webview_window: tauri::WebviewWindow) -> Result<(), String> {
+    tracing::info!(
+        window = webview_window.label(),
+        devtools_context_menu_enabled = crate::startup_diagnostics::devtools_context_menu_enabled(),
+        "Opening AQBot WebView devtools"
+    );
     webview_window.open_devtools();
     Ok(())
 }
