@@ -225,6 +225,12 @@ export const useProviderStore = create<ProviderState>((set) => ({
   saveModels: async (providerId, models) => {
     try {
       await invoke('save_models', { providerId, models });
+      if (providerId.startsWith('builtin_')) {
+        // Virtual provider was materialized — refetch to get real ID
+        const providers = await invoke<ProviderConfig[]>('list_providers');
+        set({ providers, error: null });
+        return;
+      }
       set((s) => ({
         providers: s.providers.map((p) =>
           p.id === providerId ? { ...p, models } : p,

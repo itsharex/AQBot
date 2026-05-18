@@ -54,4 +54,61 @@ describe('providerStore', () => {
     expect(invokeMock).toHaveBeenNthCalledWith(2, 'list_providers');
     expect(useProviderStore.getState().providers).toEqual(materializedProviders);
   });
+
+  it('refetches providers after saving models for a virtual builtin provider', async () => {
+    const { useProviderStore } = await import('../providerStore');
+    const models = [
+      {
+        provider_id: 'builtin_minimax',
+        model_id: 'MiniMax-M1',
+        name: 'MiniMax-M1',
+        group_name: null,
+        model_type: 'Chat',
+        capabilities: ['TextChat'],
+        max_tokens: 1000000,
+        enabled: true,
+        param_overrides: null,
+      },
+    ];
+    const materializedProviders = [
+      {
+        id: 'real-minimax',
+        builtin_id: 'minimax',
+        name: 'MiniMax',
+        models,
+      },
+    ];
+
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'save_models') {
+        return undefined;
+      }
+      if (command === 'list_providers') {
+        return materializedProviders;
+      }
+      throw new Error(`Unexpected invoke: ${command}`);
+    });
+
+    useProviderStore.setState({
+      providers: [
+        {
+          id: 'builtin_minimax',
+          builtin_id: 'minimax',
+          name: 'MiniMax',
+          models: [],
+        },
+      ] as never,
+      loading: false,
+      error: null,
+    });
+
+    await useProviderStore.getState().saveModels('builtin_minimax', models as never);
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'save_models', {
+      providerId: 'builtin_minimax',
+      models,
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'list_providers');
+    expect(useProviderStore.getState().providers).toEqual(materializedProviders);
+  });
 });

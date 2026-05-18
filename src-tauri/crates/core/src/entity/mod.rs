@@ -1,5 +1,6 @@
 //! SeaORM entity definitions for AQBot database tables.
 
+pub mod builtin_model_deletions;
 pub mod conversation_categories;
 pub mod conversation_summaries;
 pub mod conversations;

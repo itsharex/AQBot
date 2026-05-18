@@ -221,7 +221,7 @@ pub async fn save_models(
     let real_id = aqbot_core::repo::provider::resolve_provider_id(&state.sea_db, &provider_id)
         .await
         .map_err(|e| e.to_string())?;
-    aqbot_core::repo::provider::save_models(&state.sea_db, &real_id, &models)
+    aqbot_core::repo::provider::save_models_from_user_selection(&state.sea_db, &real_id, &models)
         .await
         .map_err(|e| e.to_string())
 }

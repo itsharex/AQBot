@@ -32,6 +32,7 @@ mod m20260430_000001_add_conversation_thinking_level;
 mod m20260501_000001_add_knowledge_base_rerank_settings;
 mod m20260504_000001_split_openai_compatible_provider_types;
 mod m20260515_000001_add_knowledge_base_index_schedule;
+mod m20260518_000001_add_builtin_model_deletions;
 
 pub struct Migrator;
 
@@ -71,6 +72,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260501_000001_add_knowledge_base_rerank_settings::Migration),
             Box::new(m20260504_000001_split_openai_compatible_provider_types::Migration),
             Box::new(m20260515_000001_add_knowledge_base_index_schedule::Migration),
+            Box::new(m20260518_000001_add_builtin_model_deletions::Migration),
         ]
     }
 }
@@ -134,6 +136,24 @@ mod tests {
                 "missing table {table}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn migrator_up_adds_builtin_model_deletions_table_on_sqlite() {
+        let db = sqlite_test_db().await;
+
+        Migrator::up(&db, None)
+            .await
+            .expect("run sqlite migrations");
+
+        let manager = SchemaManager::new(&db);
+        assert!(
+            manager
+                .has_table("builtin_model_deletions")
+                .await
+                .expect("check builtin model deletions table"),
+            "missing builtin_model_deletions table"
+        );
     }
 
     #[tokio::test]

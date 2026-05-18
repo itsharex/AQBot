@@ -1,9 +1,9 @@
-use sea_orm::sea_query::Expr;
+use sea_orm::sea_query::{Expr, OnConflict};
 use sea_orm::*;
 use std::collections::HashSet;
 
 use crate::crypto::{decrypt_key, encrypt_key};
-use crate::entity::{models, provider_keys, providers};
+use crate::entity::{builtin_model_deletions, models, provider_keys, providers};
 use crate::error::{AQBotError, Result};
 use crate::types::*;
 use crate::utils::{gen_id, now_ts};
@@ -590,6 +590,45 @@ pub async fn get_model(
     Ok(model_from_entity(row))
 }
 
+async fn replace_models_for_provider<C>(
+    conn: &C,
+    provider_id: &str,
+    input_models: &[Model],
+) -> std::result::Result<(), DbErr>
+where
+    C: ConnectionTrait,
+{
+    models::Entity::delete_many()
+        .filter(models::Column::ProviderId.eq(provider_id))
+        .exec(conn)
+        .await?;
+
+    for model in input_models {
+        let capabilities =
+            serde_json::to_string(&model.capabilities).unwrap_or_else(|_| "[]".to_string());
+        let param_overrides = model
+            .param_overrides
+            .as_ref()
+            .map(|po| serde_json::to_string(po).unwrap_or_else(|_| "null".to_string()));
+
+        models::ActiveModel {
+            provider_id: Set(provider_id.to_string()),
+            model_id: Set(model.model_id.clone()),
+            name: Set(model.name.clone()),
+            group_name: Set(model.group_name.clone()),
+            model_type: Set(model.model_type.to_string()),
+            capabilities: Set(capabilities),
+            max_tokens: Set(model.max_tokens.map(|v| v as i64)),
+            enabled: Set(if model.enabled { 1 } else { 0 }),
+            param_overrides: Set(param_overrides),
+        }
+        .insert(conn)
+        .await?;
+    }
+
+    Ok(())
+}
+
 pub async fn save_models(
     db: &DatabaseConnection,
     provider_id: &str,
@@ -599,36 +638,94 @@ pub async fn save_models(
     let input_models = input_models.to_vec();
 
     db.transaction::<_, _, sea_orm::DbErr>(|txn| {
+        Box::pin(async move { replace_models_for_provider(txn, &provider_id, &input_models).await })
+    })
+    .await?;
+
+    Ok(())
+}
+
+async fn list_deleted_builtin_model_ids(
+    db: &DatabaseConnection,
+    builtin_id: &str,
+) -> Result<HashSet<String>> {
+    let rows = builtin_model_deletions::Entity::find()
+        .filter(builtin_model_deletions::Column::BuiltinId.eq(builtin_id))
+        .all(db)
+        .await?;
+
+    Ok(rows.into_iter().map(|row| row.model_id).collect())
+}
+
+pub async fn save_models_from_user_selection(
+    db: &DatabaseConnection,
+    provider_id: &str,
+    input_models: &[Model],
+) -> Result<()> {
+    let provider = get_provider(db, provider_id).await?;
+    let Some(builtin_id) = provider.builtin_id.clone() else {
+        return save_models(db, provider_id, input_models).await;
+    };
+
+    let builtins = crate::db::get_builtin_providers();
+    let Some(builtin) = builtins.iter().find(|bp| bp.builtin_id == builtin_id) else {
+        return save_models(db, provider_id, input_models).await;
+    };
+
+    let builtin_model_ids: HashSet<&str> = builtin
+        .models
+        .iter()
+        .map(|model| model.model_id)
+        .collect();
+    let before_model_ids: HashSet<String> = provider
+        .models
+        .iter()
+        .filter(|model| builtin_model_ids.contains(model.model_id.as_str()))
+        .map(|model| model.model_id.clone())
+        .collect();
+    let after_model_ids: HashSet<String> = input_models
+        .iter()
+        .filter(|model| builtin_model_ids.contains(model.model_id.as_str()))
+        .map(|model| model.model_id.clone())
+        .collect();
+    let deleted_model_ids: Vec<String> = before_model_ids
+        .difference(&after_model_ids)
+        .cloned()
+        .collect();
+    let restored_model_ids: Vec<String> = after_model_ids.into_iter().collect();
+    let now = now_ts();
+    let provider_id = provider_id.to_string();
+    let input_models = input_models.to_vec();
+
+    db.transaction::<_, _, sea_orm::DbErr>(|txn| {
         Box::pin(async move {
-            models::Entity::delete_many()
-                .filter(models::Column::ProviderId.eq(&provider_id))
+            if !restored_model_ids.is_empty() {
+                builtin_model_deletions::Entity::delete_many()
+                    .filter(builtin_model_deletions::Column::BuiltinId.eq(&builtin_id))
+                    .filter(builtin_model_deletions::Column::ModelId.is_in(restored_model_ids))
+                    .exec(txn)
+                    .await?;
+            }
+
+            for model_id in deleted_model_ids {
+                builtin_model_deletions::Entity::insert(builtin_model_deletions::ActiveModel {
+                    builtin_id: Set(builtin_id.clone()),
+                    model_id: Set(model_id),
+                    deleted_at: Set(now),
+                })
+                .on_conflict(
+                    OnConflict::columns([
+                        builtin_model_deletions::Column::BuiltinId,
+                        builtin_model_deletions::Column::ModelId,
+                    ])
+                    .update_column(builtin_model_deletions::Column::DeletedAt)
+                    .to_owned(),
+                )
                 .exec(txn)
-                .await?;
-
-            for model in &input_models {
-                let capabilities =
-                    serde_json::to_string(&model.capabilities).unwrap_or_else(|_| "[]".to_string());
-                let param_overrides = model
-                    .param_overrides
-                    .as_ref()
-                    .map(|po| serde_json::to_string(po).unwrap_or_else(|_| "null".to_string()));
-
-                models::ActiveModel {
-                    provider_id: Set(provider_id.clone()),
-                    model_id: Set(model.model_id.clone()),
-                    name: Set(model.name.clone()),
-                    group_name: Set(model.group_name.clone()),
-                    model_type: Set(model.model_type.to_string()),
-                    capabilities: Set(capabilities),
-                    max_tokens: Set(model.max_tokens.map(|v| v as i64)),
-                    enabled: Set(if model.enabled { 1 } else { 0 }),
-                    param_overrides: Set(param_overrides),
-                }
-                .insert(txn)
                 .await?;
             }
 
-            Ok(())
+            replace_models_for_provider(txn, &provider_id, &input_models).await
         })
     })
     .await?;
@@ -696,10 +793,12 @@ async fn sync_missing_builtin_models(
             .iter()
             .map(|model| model.model_id.as_str())
             .collect();
+        let deleted_ids = list_deleted_builtin_model_ids(db, bp.builtin_id).await?;
         let missing_models: Vec<Model> = bp
             .models
             .iter()
             .filter(|model| !existing_ids.contains(model.model_id))
+            .filter(|model| !deleted_ids.contains(model.model_id))
             .map(|model| model.to_model(&provider.id))
             .collect();
 
@@ -947,6 +1046,63 @@ mod tests {
                 .as_ref()
                 .and_then(|params| params.use_max_completion_tokens),
             Some(true)
+        );
+    }
+
+    #[tokio::test]
+    async fn user_deleted_builtin_models_stay_hidden_until_readded() {
+        let h = create_test_pool().await.unwrap();
+        let db = &h.conn;
+
+        let provider_id = ensure_builtin_provider(db, "minimax").await.unwrap();
+        let provider = get_provider(db, &provider_id).await.unwrap();
+        let deleted_model = provider
+            .models
+            .iter()
+            .find(|model| model.model_id == "MiniMax-M2.7")
+            .expect("MiniMax-M2.7 exists in defaults")
+            .clone();
+        let kept_models: Vec<Model> = provider
+            .models
+            .iter()
+            .filter(|model| model.model_id != deleted_model.model_id)
+            .cloned()
+            .collect();
+
+        save_models_from_user_selection(db, &provider_id, &kept_models)
+            .await
+            .unwrap();
+
+        let providers = list_providers_merged(db).await.unwrap();
+        let minimax = providers
+            .iter()
+            .find(|provider| provider.builtin_id.as_deref() == Some("minimax"))
+            .expect("minimax provider");
+        assert!(
+            !minimax
+                .models
+                .iter()
+                .any(|model| model.model_id == deleted_model.model_id),
+            "user-deleted builtin model should not be auto-restored"
+        );
+
+        let mut restored_models = kept_models;
+        restored_models.push(deleted_model.clone());
+        save_models_from_user_selection(db, &provider_id, &restored_models)
+            .await
+            .unwrap();
+
+        let providers = list_providers_merged(db).await.unwrap();
+        let minimax = providers
+            .iter()
+            .find(|provider| provider.builtin_id.as_deref() == Some("minimax"))
+            .expect("minimax provider");
+        assert!(
+            minimax
+                .models
+                .iter()
+                .any(|model| model.model_id == deleted_model.model_id),
+            "re-added builtin model should clear the deletion marker"
         );
     }
 
