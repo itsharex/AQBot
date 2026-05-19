@@ -9,6 +9,8 @@ import type {
   ModelParamOverrides,
   DeepLinkProviderImportInput,
   DeepLinkProviderImportResult,
+  ProviderImportBatchResult,
+  ProviderImportCandidate,
 } from '@/types';
 
 interface ProviderState {
@@ -18,6 +20,8 @@ interface ProviderState {
   fetchProviders: () => Promise<void>;
   createProvider: (input: CreateProviderInput) => Promise<ProviderConfig>;
   importProviderFromDeepLink: (input: DeepLinkProviderImportInput) => Promise<DeepLinkProviderImportResult>;
+  scanCcSwitchProviderImports: () => Promise<ProviderImportCandidate[]>;
+  importCcSwitchProviderConfigs: (candidateIds: string[]) => Promise<ProviderImportBatchResult>;
   updateProvider: (id: string, input: UpdateProviderInput) => Promise<void>;
   deleteProvider: (id: string) => Promise<void>;
   toggleProvider: (id: string, enabled: boolean) => Promise<void>;
@@ -64,6 +68,31 @@ export const useProviderStore = create<ProviderState>((set) => ({
     try {
       const result = await invoke<DeepLinkProviderImportResult>('import_provider_from_deep_link', { input });
       set({ error: null });
+      return result;
+    } catch (e) {
+      set({ error: String(e) });
+      throw e;
+    }
+  },
+
+  scanCcSwitchProviderImports: async () => {
+    try {
+      const candidates = await invoke<ProviderImportCandidate[]>('scan_cc_switch_provider_imports');
+      set({ error: null });
+      return candidates;
+    } catch (e) {
+      set({ error: String(e) });
+      throw e;
+    }
+  },
+
+  importCcSwitchProviderConfigs: async (candidateIds) => {
+    try {
+      const result = await invoke<ProviderImportBatchResult>('import_cc_switch_provider_configs', {
+        candidateIds,
+      });
+      const providers = await invoke<ProviderConfig[]>('list_providers');
+      set({ providers, error: null });
       return result;
     } catch (e) {
       set({ error: String(e) });

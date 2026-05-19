@@ -111,4 +111,65 @@ describe('providerStore', () => {
     expect(invokeMock).toHaveBeenNthCalledWith(2, 'list_providers');
     expect(useProviderStore.getState().providers).toEqual(materializedProviders);
   });
+
+  it('scans CC Switch provider import candidates', async () => {
+    const { useProviderStore } = await import('../providerStore');
+    const candidates = [
+      {
+        id: 'candidate-1',
+        source_app: 'cc-switch',
+        name: 'Claude Relay',
+        provider_type: 'anthropic',
+        api_host: 'https://api.anthropic.com',
+        api_path: '/v1/messages',
+        key_prefix: 'sk-ant...',
+        models: ['claude-sonnet'],
+        status: 'ready',
+        reason: null,
+      },
+    ];
+
+    invokeMock.mockResolvedValueOnce(candidates);
+
+    await expect(useProviderStore.getState().scanCcSwitchProviderImports()).resolves.toEqual(candidates);
+    expect(invokeMock).toHaveBeenCalledWith('scan_cc_switch_provider_imports');
+  });
+
+  it('imports selected CC Switch candidates and refreshes providers', async () => {
+    const { useProviderStore } = await import('../providerStore');
+    const result = {
+      created_count: 1,
+      added_key_count: 1,
+      reused_count: 0,
+      skipped_count: 0,
+      provider_ids: ['provider-1'],
+    };
+    const providers = [
+      {
+        id: 'provider-1',
+        builtin_id: null,
+        name: 'Claude Relay',
+      },
+    ];
+
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'import_cc_switch_provider_configs') {
+        return result;
+      }
+      if (command === 'list_providers') {
+        return providers;
+      }
+      throw new Error(`Unexpected invoke: ${command}`);
+    });
+
+    await expect(
+      useProviderStore.getState().importCcSwitchProviderConfigs(['candidate-1']),
+    ).resolves.toEqual(result);
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'import_cc_switch_provider_configs', {
+      candidateIds: ['candidate-1'],
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'list_providers');
+    expect(useProviderStore.getState().providers).toEqual(providers);
+  });
 });

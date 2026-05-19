@@ -1,4 +1,5 @@
 use crate::AppState;
+use aqbot_core::repo::provider_import::{ProviderImportBatchResult, ProviderImportCandidate};
 use aqbot_core::types::*;
 use std::time::Instant;
 use tauri::State;
@@ -29,6 +30,32 @@ pub async fn import_provider_from_deep_link(
         &state.sea_db,
         &state.master_key,
         input,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn scan_cc_switch_provider_imports(
+    state: State<'_, AppState>,
+) -> Result<Vec<ProviderImportCandidate>, String> {
+    aqbot_core::repo::provider_import::scan_cc_switch_provider_imports(
+        &state.sea_db,
+        &state.master_key,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn import_cc_switch_provider_configs(
+    state: State<'_, AppState>,
+    candidate_ids: Vec<String>,
+) -> Result<ProviderImportBatchResult, String> {
+    aqbot_core::repo::provider_import::import_cc_switch_provider_configs(
+        &state.sea_db,
+        &state.master_key,
+        candidate_ids,
     )
     .await
     .map_err(|e| e.to_string())

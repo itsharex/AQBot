@@ -1,12 +1,16 @@
 import { App } from 'antd';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-import type { ProviderConfig } from '@/types';
+import type { ProviderConfig, ProviderImportCandidate } from '@/types';
 import { ProviderList } from '../ProviderList';
 
 const mocks = vi.hoisted(() => ({
   createProvider: vi.fn(),
+  fetchProviders: vi.fn(),
+  scanCcSwitchProviderImports: vi.fn(),
+  importCcSwitchProviderConfigs: vi.fn(),
   toggleProvider: vi.fn(),
   reorderProviders: vi.fn(),
   setSelectedProviderId: vi.fn(),
@@ -33,13 +37,31 @@ function makeProvider(overrides: Partial<ProviderConfig>): ProviderConfig {
   };
 }
 
+function makeCandidate(overrides: Partial<ProviderImportCandidate>): ProviderImportCandidate {
+  return {
+    id: 'candidate-1',
+    source_app: 'cc-switch',
+    name: 'Claude Relay',
+    provider_type: 'anthropic',
+    api_host: 'https://api.anthropic.com',
+    api_path: '/v1/messages',
+    key_prefix: 'sk-ant...',
+    models: ['claude-sonnet'],
+    status: 'ready',
+    reason: null,
+    ...overrides,
+  };
+}
+
 let providers: ProviderConfig[] = [];
 let selectedProviderId: string | null = null;
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) =>
-      key === 'settings.builtinProviderBadge' ? 'Built-in Label' : (fallback ?? key),
+    t: (key: string, fallback?: string | Record<string, unknown>) =>
+      key === 'settings.builtinProviderBadge'
+        ? 'Built-in Label'
+        : (typeof fallback === 'string' ? fallback : key),
   }),
 }));
 
@@ -81,6 +103,9 @@ vi.mock('@/stores', () => ({
     selector({
       providers,
       createProvider: mocks.createProvider,
+      fetchProviders: mocks.fetchProviders,
+      scanCcSwitchProviderImports: mocks.scanCcSwitchProviderImports,
+      importCcSwitchProviderConfigs: mocks.importCcSwitchProviderConfigs,
       toggleProvider: mocks.toggleProvider,
       reorderProviders: mocks.reorderProviders,
     }),
@@ -99,6 +124,14 @@ describe('ProviderList', () => {
       makeProvider({ id: 'builtin-openai', name: 'OpenAI', builtin_id: 'openai' }),
       makeProvider({ id: 'custom-openai', name: 'Custom OpenAI', builtin_id: null }),
     ];
+    mocks.scanCcSwitchProviderImports.mockResolvedValue([]);
+    mocks.importCcSwitchProviderConfigs.mockResolvedValue({
+      created_count: 0,
+      added_key_count: 0,
+      reused_count: 0,
+      skipped_count: 0,
+      provider_ids: [],
+    });
   });
 
   it('shows the built-in badge only next to built-in providers', () => {
@@ -112,5 +145,71 @@ describe('ProviderList', () => {
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
     expect(screen.getByText('Custom OpenAI')).toBeInTheDocument();
     expect(screen.getAllByTestId('provider-icon')).toHaveLength(2);
+  });
+
+  it('shows an import icon after the add provider button and scans from the dropdown', async () => {
+    const user = userEvent.setup();
+    render(
+      <App>
+        <ProviderList />
+      </App>,
+    );
+
+    const addButton = screen.getByRole('button', { name: 'settings.addProvider' });
+    const importButton = screen.getByRole('button', { name: 'settings.importProviders' });
+    const toolbarButtons = screen.getAllByRole('button');
+    expect(toolbarButtons.indexOf(importButton)).toBeGreaterThan(toolbarButtons.indexOf(addButton));
+
+    await user.click(importButton);
+    await user.click(await screen.findByText('settings.importFromCcSwitch'));
+
+    expect(mocks.scanCcSwitchProviderImports).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('settings.ccSwitchImportTitle')).toBeInTheDocument();
+  });
+
+  it('defaults selectable import candidates and submits selected ids', async () => {
+    const user = userEvent.setup();
+    mocks.scanCcSwitchProviderImports.mockResolvedValue([
+      makeCandidate({ id: 'ready-1', name: 'Ready Provider', status: 'ready' }),
+      makeCandidate({ id: 'add-key-1', name: 'Add Key Provider', status: 'add_key' }),
+      makeCandidate({ id: 'existing-1', name: 'Existing Provider', status: 'already_exists' }),
+      makeCandidate({
+        id: 'unsupported-1',
+        name: 'OAuth Provider',
+        status: 'unsupported',
+        reason: 'OAuth providers cannot be imported',
+      }),
+    ]);
+    mocks.importCcSwitchProviderConfigs.mockResolvedValue({
+      created_count: 1,
+      added_key_count: 1,
+      reused_count: 0,
+      skipped_count: 0,
+      provider_ids: ['provider-1'],
+    });
+
+    render(
+      <App>
+        <ProviderList />
+      </App>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.importProviders' }));
+    await user.click(await screen.findByText('settings.importFromCcSwitch'));
+
+    expect(await screen.findByText('Ready Provider')).toBeInTheDocument();
+    expect(screen.getByText('Add Key Provider')).toBeInTheDocument();
+    expect(screen.getByText('OAuth providers cannot be imported')).toBeInTheDocument();
+
+    const unsupportedRow = screen.getByText('OAuth Provider').closest('tr');
+    expect(unsupportedRow).not.toBeNull();
+    expect(within(unsupportedRow as HTMLTableRowElement).getByRole('checkbox')).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'common.confirm' }));
+
+    await waitFor(() => {
+      expect(mocks.importCcSwitchProviderConfigs).toHaveBeenCalledWith(['ready-1', 'add-key-1']);
+    });
+    expect(mocks.setSelectedProviderId).toHaveBeenCalledWith('provider-1');
   });
 });

@@ -84,6 +84,29 @@ export interface DeepLinkProviderImportResult {
   reused_key: boolean;
 }
 
+export type ProviderImportStatus = 'ready' | 'add_key' | 'already_exists' | 'unsupported';
+
+export interface ProviderImportCandidate {
+  id: string;
+  source_app: string;
+  name: string;
+  provider_type: ProviderType;
+  api_host: string;
+  api_path: string | null;
+  key_prefix: string;
+  models: string[];
+  status: ProviderImportStatus;
+  reason: string | null;
+}
+
+export interface ProviderImportBatchResult {
+  created_count: number;
+  added_key_count: number;
+  reused_count: number;
+  skipped_count: number;
+  provider_ids: string[];
+}
+
 // === Model System ===
 export type ModelCapability = 'TextChat' | 'Vision' | 'FunctionCalling' | 'Reasoning' | 'RealtimeVoice';
 export type ModelType = 'Chat' | 'Voice' | 'Embedding' | 'Image' | 'Rerank';

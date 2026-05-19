@@ -219,6 +219,8 @@ pub fn run() {
         commands::providers::list_providers,
         commands::providers::create_provider,
         commands::providers::import_provider_from_deep_link,
+        commands::providers::scan_cc_switch_provider_imports,
+        commands::providers::import_cc_switch_provider_configs,
         commands::providers::update_provider,
         commands::providers::delete_provider,
         commands::providers::toggle_provider,

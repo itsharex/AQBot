@@ -1,5 +1,21 @@
-import { Button, Input, Modal, Form, Select, Switch, App, theme, Divider } from 'antd';
-import { Plus, Search, GripVertical, BadgeCheck } from 'lucide-react';
+import {
+  Button,
+  Input,
+  Modal,
+  Form,
+  Select,
+  Switch,
+  App,
+  theme,
+  Divider,
+  Dropdown,
+  Tooltip,
+  Table,
+  Tag,
+  Typography,
+  Empty,
+} from 'antd';
+import { Plus, Search, GripVertical, BadgeCheck, Download } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +35,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useProviderStore, useUIStore } from '@/stores';
 import { SmartProviderIcon } from '@/lib/providerIcons';
-import type { ProviderConfig, ProviderType } from '@/types';
+import type { ProviderConfig, ProviderImportCandidate, ProviderImportStatus, ProviderType } from '@/types';
 
 const PROVIDER_TYPE_OPTIONS: { label: string; value: ProviderType }[] = [
   { label: 'OpenAI', value: 'openai' },
@@ -49,6 +65,23 @@ const DEFAULT_HOSTS: Record<ProviderType, string> = {
   voyage: 'https://api.voyageai.com',
   custom: '',
 };
+
+const IMPORTABLE_STATUSES = new Set<ProviderImportStatus>(['ready', 'add_key']);
+
+function getImportStatusColor(status: ProviderImportStatus) {
+  switch (status) {
+    case 'ready':
+      return 'green';
+    case 'add_key':
+      return 'blue';
+    case 'already_exists':
+      return 'default';
+    case 'unsupported':
+      return 'orange';
+    default:
+      return 'default';
+  }
+}
 
 function BuiltinProviderIcon({
   provider,
@@ -184,6 +217,8 @@ export function ProviderList() {
   const { message } = App.useApp();
   const providers = useProviderStore((s) => s.providers);
   const createProvider = useProviderStore((s) => s.createProvider);
+  const scanCcSwitchProviderImports = useProviderStore((s) => s.scanCcSwitchProviderImports);
+  const importCcSwitchProviderConfigs = useProviderStore((s) => s.importCcSwitchProviderConfigs);
   const toggleProvider = useProviderStore((s) => s.toggleProvider);
   const reorderProviders = useProviderStore((s) => s.reorderProviders);
   const selectedProviderId = useUIStore((s) => s.selectedProviderId);
@@ -205,6 +240,11 @@ export function ProviderList() {
 
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importScanning, setImportScanning] = useState(false);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const [importCandidates, setImportCandidates] = useState<ProviderImportCandidate[]>([]);
+  const [selectedImportIds, setSelectedImportIds] = useState<React.Key[]>([]);
   const [form] = Form.useForm();
 
   const filteredProviders = useMemo(
@@ -225,6 +265,73 @@ export function ProviderList() {
     [filteredProviders],
   );
 
+  const importColumns = useMemo(
+    () => [
+      {
+        title: t('settings.ccSwitchImportSourceApp'),
+        dataIndex: 'source_app',
+        key: 'source_app',
+        width: 120,
+      },
+      {
+        title: t('settings.ccSwitchImportProvider'),
+        dataIndex: 'name',
+        key: 'name',
+        width: 160,
+      },
+      {
+        title: t('settings.ccSwitchImportType'),
+        dataIndex: 'provider_type',
+        key: 'provider_type',
+        width: 140,
+        render: (value: ProviderType) => PROVIDER_TYPE_OPTIONS.find((item) => item.value === value)?.label ?? value,
+      },
+      {
+        title: t('settings.ccSwitchImportEndpoint'),
+        key: 'endpoint',
+        width: 260,
+        render: (_: unknown, candidate: ProviderImportCandidate) => (
+          <Typography.Text ellipsis style={{ maxWidth: 240 }}>
+            {candidate.api_host}
+            {candidate.api_path ?? ''}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: t('settings.ccSwitchImportKey'),
+        dataIndex: 'key_prefix',
+        key: 'key_prefix',
+        width: 110,
+        render: (value: string) => value || '-',
+      },
+      {
+        title: t('settings.ccSwitchImportModels'),
+        key: 'models',
+        width: 90,
+        align: 'right' as const,
+        render: (_: unknown, candidate: ProviderImportCandidate) => candidate.models.length,
+      },
+      {
+        title: t('settings.ccSwitchImportStatus'),
+        key: 'status',
+        width: 180,
+        render: (_: unknown, candidate: ProviderImportCandidate) => (
+          <div className="flex flex-col gap-1">
+            <Tag color={getImportStatusColor(candidate.status)} style={{ marginInlineEnd: 0, width: 'fit-content' }}>
+              {t(`settings.ccSwitchImportStatus_${candidate.status}`)}
+            </Tag>
+            {candidate.reason && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {candidate.reason}
+              </Typography.Text>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [t],
+  );
+
   const handleAddProvider = async () => {
     try {
       const values = await form.validateFields();
@@ -240,6 +347,52 @@ export function ProviderList() {
     } catch (e) {
       if (e && typeof e === 'object' && 'errorFields' in e) return;
       message.error(t('error.saveFailed'));
+    }
+  };
+
+  const handleScanCcSwitch = async () => {
+    setImportScanning(true);
+    try {
+      const candidates = await scanCcSwitchProviderImports();
+      setImportCandidates(candidates);
+      setSelectedImportIds(
+        candidates
+          .filter((candidate) => IMPORTABLE_STATUSES.has(candidate.status))
+          .map((candidate) => candidate.id),
+      );
+      setImportModalOpen(true);
+    } catch (e) {
+      message.error(t('settings.ccSwitchImportScanFailed', { reason: String(e) }));
+    } finally {
+      setImportScanning(false);
+    }
+  };
+
+  const handleImportCandidates = async () => {
+    if (selectedImportIds.length === 0) {
+      return;
+    }
+    setImportSubmitting(true);
+    try {
+      const result = await importCcSwitchProviderConfigs(selectedImportIds.map(String));
+      message.success(
+        t('settings.ccSwitchImportSuccess', {
+          created: result.created_count,
+          added: result.added_key_count,
+          reused: result.reused_count,
+          skipped: result.skipped_count,
+        }),
+      );
+      if (result.provider_ids.length > 0) {
+        setSelectedProviderId(result.provider_ids[0]);
+      }
+      setImportModalOpen(false);
+      setImportCandidates([]);
+      setSelectedImportIds([]);
+    } catch (e) {
+      message.error(t('settings.ccSwitchImportFailed', { reason: String(e) }));
+    } finally {
+      setImportSubmitting(false);
     }
   };
 
@@ -289,10 +442,33 @@ export function ProviderList() {
         />
         <Button
           type="default"
+          aria-label={t('settings.addProvider')}
           icon={<Plus size={16} />}
           onClick={() => setModalOpen(true)}
           style={{ flexShrink: 0 }}
         />
+        <Dropdown
+          menu={{
+            items: [
+              {
+                key: 'cc-switch',
+                label: t('settings.importFromCcSwitch'),
+                onClick: handleScanCcSwitch,
+              },
+            ],
+          }}
+          trigger={['click']}
+        >
+          <Tooltip title={t('settings.importProviders')}>
+            <Button
+              type="default"
+              aria-label={t('settings.importProviders')}
+              icon={<Download size={16} />}
+              loading={importScanning}
+              style={{ flexShrink: 0 }}
+            />
+          </Tooltip>
+        </Dropdown>
       </div>
       <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0">
         {enabledProviders.length > 0 && (
@@ -389,6 +565,43 @@ export function ProviderList() {
             <Input placeholder="https://api.openai.com" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={t('settings.ccSwitchImportTitle')}
+        open={importModalOpen}
+        mask={{ enabled: true, blur: true }}
+        width={960}
+        onOk={handleImportCandidates}
+        onCancel={() => {
+          setImportModalOpen(false);
+          setImportCandidates([]);
+          setSelectedImportIds([]);
+        }}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: selectedImportIds.length === 0 }}
+        confirmLoading={importSubmitting}
+      >
+        {importCandidates.length === 0 ? (
+          <Empty description={t('settings.ccSwitchImportEmpty')} />
+        ) : (
+          <Table
+            size="small"
+            rowKey="id"
+            pagination={false}
+            dataSource={importCandidates}
+            columns={importColumns}
+            scroll={{ x: 920 }}
+            rowSelection={{
+              selectedRowKeys: selectedImportIds,
+              onChange: setSelectedImportIds,
+              getCheckboxProps: (candidate) => ({
+                disabled: candidate.status === 'unsupported',
+              }),
+            }}
+          />
+        )}
       </Modal>
     </div>
   );
