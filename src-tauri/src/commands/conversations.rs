@@ -2448,6 +2448,7 @@ fn failed_rag_context(kb_ids: &[String], mem_ids: &[String], message: &str) -> R
         context_parts: Vec::new(),
         source_results: Vec::new(),
         errors: rag_source_errors(kb_ids, mem_ids, message),
+        empty_results: Vec::new(),
     }
 }
 
@@ -2532,6 +2533,7 @@ async fn collect_and_emit_rag_context(
             message_id: Some(assistant_message_id.to_string()),
             sources: rag_result.source_results.clone(),
             errors: rag_result.errors.clone(),
+            empty_results: rag_result.empty_results.clone(),
         },
     );
 
